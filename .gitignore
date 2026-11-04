@@ -1,0 +1,24 @@
+# Secretos — NUNCA subir
+LlavesMeta.txt
+*.env
+.env*
+!.env.example
+
+# Datos personales de contactos y reportes (nunca versionar)
+datos/
+reportes/
+estandarizacion/
+*.xlsx
+*.xls
+*.csv
+*.docx
+
+# Copia del proyecto anterior (censo LegalMedica) — contiene datos de pacientes
+_legado_censo/
+code/importaciones/
+
+# Dependencias / sistema
+node_modules/
+.DS_Store
+Thumbs.db
+desktop.ini

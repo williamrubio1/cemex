@@ -1,0 +1,436 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="robots" content="noindex" />
+<title>Análisis de la campaña — CETEX</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/echarts/5.5.0/echarts.min.js"></script>
+<script src="/graficas.js"></script>
+<style>
+  :root {
+    --bg:#f6f6f3; --surface:#fff; --border:#e6e5df;
+    --text:#29292a; --muted:#70706a; --accent:#3f6b5e; --track:#ecebe5;
+    --shadow:0 1px 2px rgba(20,20,15,.04),0 1px 8px rgba(20,20,15,.03);
+    --c1:#3f6b5e; --c2:#6b7f9e; --c3:#a98b5d; --c4:#9e6b6b; --c5:#7d8a6a; --c6:#7a7a90; --c7:#a3a39a;
+    --ok:#3f7d5e; --pend:#b58a3c; --none:#b9b9b0; --bad:#a95c54;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#191a19; --surface:#232421; --border:#34352f;
+      --text:#e9e8e2; --muted:#9b9b92; --accent:#77b0a0; --track:#2d2e29; --shadow:none;
+      --c1:#77b0a0; --c2:#8fa3c2; --c3:#c6a877; --c4:#c08a8a; --c5:#9aa985; --c6:#9a9ab0; --c7:#6f6f68;
+      --ok:#6fae8f; --pend:#cfa661; --none:#5c5c56; --bad:#c58a82; }
+  }
+  * { box-sizing:border-box; }
+  html,body { margin:0; }
+  body { background:var(--bg); color:var(--text);
+    font:14px/1.55 ui-sans-serif,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; -webkit-font-smoothing:antialiased; }
+  .wrap { max-width:1100px; margin:0 auto; padding:28px 16px 60px; }
+  header { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; margin-bottom:22px; flex-wrap:wrap; }
+  header h1 { font-size:20px; font-weight:600; margin:0 0 4px; letter-spacing:-.01em; }
+  header p { margin:0; color:var(--muted); font-size:13px; }
+  header a { color:var(--accent); text-decoration:none; }
+
+  select, input, button, a.btn {
+    font:inherit; font-size:13px; color:var(--text); background:var(--surface);
+    border:1px solid var(--border); border-radius:8px; padding:7px 10px; max-width:100%;
+  }
+  button, a.btn { cursor:pointer; text-decoration:none; box-shadow:var(--shadow); }
+  button:hover, a.btn:hover { border-color:var(--muted); }
+  button.primario { background:var(--accent); color:#fff; border-color:var(--accent); font-weight:600; }
+  button.chip { font-size:12px; padding:6px 10px; box-shadow:none; color:var(--muted); }
+  .barra { display:flex; flex-wrap:wrap; gap:9px; align-items:center; margin-bottom:10px; }
+  .barra label { display:flex; align-items:center; gap:6px; font-size:12.5px; color:var(--muted); }
+
+  .login { max-width:340px; margin:9vh auto 0; background:var(--surface); border:1px solid var(--border);
+    border-radius:12px; padding:26px; box-shadow:var(--shadow); }
+  .login h2 { font-size:16px; margin:0 0 4px; }
+  .login p { color:var(--muted); font-size:13px; margin:0 0 16px; }
+  .login label { display:block; font-size:12px; color:var(--muted); margin:12px 0 5px; }
+  .login input { width:100%; }
+  .login button { width:100%; margin-top:16px; padding:9px; }
+  .login .msg { color:#c0392b; font-size:13px; margin-top:12px; min-height:18px; }
+
+  .lectura { background:var(--surface); border:1px solid var(--border); border-left:3px solid var(--accent);
+    border-radius:10px; padding:16px 18px; box-shadow:var(--shadow); margin-bottom:20px; }
+  .lectura h2 { font-size:12px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); margin:0 0 10px; }
+  .lectura ul { margin:0; padding-left:18px; }
+  .lectura li { margin:4px 0; }
+  .lectura b { color:var(--accent); }
+
+  a.verpersonas { color:var(--accent); text-decoration:none; font-size:12px; font-weight:600; white-space:nowrap; }
+  a.verpersonas:hover { text-decoration:underline; }
+  .verfila { margin-top:10px; display:flex; flex-wrap:wrap; gap:6px 14px; }
+
+  .kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:12px; margin-bottom:20px; }
+  .kpi { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:14px 15px; box-shadow:var(--shadow); }
+  .kpi .n { font-size:21px; font-weight:620; letter-spacing:-.01em; font-variant-numeric:tabular-nums; }
+  .kpi .n .p { font-size:13px; font-weight:500; color:var(--muted); }
+  .kpi .l { color:var(--muted); font-size:12px; margin-top:3px; }
+
+  section { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:20px; box-shadow:var(--shadow); margin-bottom:18px; min-width:0; }
+  section h2 { font-size:12px; font-weight:600; margin:0 0 6px; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; }
+  section h2 span { text-transform:none; font-weight:400; }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:18px; }
+  @media (max-width:760px) { .grid2 { grid-template-columns:1fr; } }
+  .chart { width:100%; height:310px; }
+  .chart.alto { height:360px; }
+  .vacio { color:var(--muted); margin:0; padding:24px 0; }
+  .nota { font-size:12px; color:var(--muted); margin:8px 0 0; }
+
+  table.err-tab { width:100%; border-collapse:collapse; font-size:13px; }
+  .err-tab td { padding:6px 4px; border-bottom:1px solid var(--border); }
+  .err-tab tr:last-child td { border-bottom:none; }
+  .err-tab td:last-child { text-align:right; color:var(--muted); font-variant-numeric:tabular-nums; }
+
+  #chips { margin:0 0 16px; font-size:12.5px; color:var(--muted); display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
+  .chipf { font:inherit; font-size:12px; padding:4px 9px; border:1px solid var(--border); border-radius:16px;
+    background:var(--surface); cursor:pointer; color:var(--muted); box-shadow:none; }
+  .chipf:hover { border-color:var(--muted); color:var(--text); }
+
+  footer { color:var(--muted); font-size:12.5px; text-align:center; margin-top:24px; }
+  #identidad { display:flex; align-items:center; gap:16px; margin-top:22px; padding-top:18px;
+    border-top:1px solid var(--border); color:var(--muted); font-size:12px; }
+  #identidad img { height:40px; width:auto; }
+  #identidad .lm-nombre { font-weight:600; color:var(--text); font-size:13px; }
+  #identidad .lm-contacto { margin-top:3px; }
+  .err { background:var(--surface); border:1px solid var(--border); border-left:3px solid #b4534b; border-radius:10px; padding:16px; color:var(--muted); }
+  [hidden] { display:none !important; }
+
+  @media print {
+    body { background:#fff; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    .barra, #chips, #recargar, #imprimir, header a, a.verpersonas, .verfila, #ver-filtro { display:none !important; }
+    .grid2 { grid-template-columns:1fr 1fr !important; }
+    section, .kpi, .lectura, #identidad { box-shadow:none; break-inside:avoid; }
+    h2 span { display:none; }
+    #print-fecha { display:block !important; color:#555; font-size:12px; margin-bottom:12px; }
+  }
+  #print-fecha { display:none; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div id="vista-login" hidden>
+    <div class="login">
+      <h2>Acceso al análisis</h2>
+      <p>Ingrese sus credenciales (las mismas de la vista de respuestas).</p>
+      <label for="u">Usuario</label>
+      <input id="u" type="text" autocomplete="username" autofocus />
+      <label for="p">Contraseña</label>
+      <input id="p" type="password" autocomplete="current-password" />
+      <button id="entrar" class="primario" type="button">Entrar</button>
+      <div class="msg" id="login-msg"></div>
+      <p style="margin-top:14px"><a href="/">← Panel público</a></p>
+    </div>
+  </div>
+
+  <div id="vista-panel" hidden>
+    <header>
+      <div>
+        <h1>Análisis de la campaña de WhatsApp</h1>
+        <p><span id="nombre-campana">CETEX</span> · informe de resultados ·
+          <a href="/respuestas">Ver respuestas</a> ·
+          <a href="#" id="salir">Cerrar sesión</a></p>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <a class="verpersonas" id="ver-filtro" href="/respuestas">Ver las personas de este filtro →</a>
+        <button id="imprimir" type="button">Imprimir / PDF</button>
+        <button id="recargar" type="button">Actualizar</button>
+      </div>
+    </header>
+    <div id="print-fecha"></div>
+
+    <div class="barra">
+      <select id="f-campana"></select>
+      <select id="f-campofecha">
+        <option value="envio">Fecha de envío</option>
+        <option value="respuesta">Fecha de respuesta</option>
+      </select>
+      <label>Desde <input type="date" id="f-desde" /></label>
+      <label>Hasta <input type="date" id="f-hasta" /></label>
+      <button class="chip" id="q-7d" type="button">7 días</button>
+      <button class="chip" id="q-30d" type="button">30 días</button>
+      <button class="chip" id="q-limpiar" type="button">Limpiar</button>
+    </div>
+    <div class="barra">
+      <select id="f-respuesta">
+        <option value="">Respuesta: todas</option>
+        <option value="interesados">Interesados</option>
+        <option value="participar">Quieren participar</option>
+        <option value="mas_info">Pidieron más información</option>
+        <option value="texto">Escribieron un mensaje</option>
+        <option value="opt_out">No desean mensajes</option>
+        <option value="sin_respuesta">Sin respuesta</option>
+      </select>
+      <select id="f-entrega">
+        <option value="">Entrega: todas</option>
+        <option value="enviado">Enviados</option>
+        <option value="entregado">Entregados</option>
+        <option value="leido">Leídos</option>
+        <option value="fallido">Fallidos</option>
+        <option value="sin_whatsapp">Sin WhatsApp</option>
+        <option value="no_enviado">Aún no enviados</option>
+      </select>
+      <select id="f-hoja">
+        <option value="">Base de origen: todas</option>
+        <option>BASE CETEX 1</option>
+        <option>BOGOTA</option>
+        <option>BASE COMEX BOGOTA</option>
+        <option>BASE MEDELLIN</option>
+        <option>MED-REGIMEN</option>
+        <option>NORMAS PYMES</option>
+      </select>
+      <input id="f-seminario" type="search" placeholder="Seminario previo contiene…" />
+      <button id="aplicar" class="primario" type="button">Aplicar</button>
+    </div>
+
+    <div id="chips"></div>
+    <div id="cont"><p style="color:var(--muted)">Cargando…</p></div>
+    <footer id="pie"></footer>
+
+    <div id="identidad">
+      <img id="lm-logo" src="/logo.png" alt="Soluctia S.A.S." onerror="this.remove()" />
+      <div class="lm-txt">
+        <div class="lm-nombre" id="op-nombre">Soluctia S.A.S.</div>
+        <div class="lm-linea" id="op-linea">Operador de la plataforma de mensajería por cuenta de CETEX.</div>
+        <div class="lm-contacto" id="lm-contacto"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const G = window.Graficas;
+  const { fmt } = G;
+  const $ = (id) => document.getElementById(id);
+  const pct = (n, t) => (t ? Math.round((n / t) * 100) : 0);
+  const iso = (d) => d.toISOString().slice(0, 10);
+  const esc = (s) => String(s ?? '').replace(/[<>&"]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c]));
+  const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+
+  function mostrar(v) { $('vista-login').hidden = v !== 'login'; $('vista-panel').hidden = v !== 'panel'; }
+
+  const FILTROS = [
+    ['f-campana', 'campana', 'Campaña'], ['f-campofecha', 'campoFecha', null],
+    ['f-desde', 'desde', 'Desde'], ['f-hasta', 'hasta', 'Hasta'],
+    ['f-respuesta', 'respuesta', 'Respuesta'], ['f-entrega', 'entrega', 'Entrega'],
+    ['f-hoja', 'hoja', 'Base'], ['f-seminario', 'seminario', 'Seminario'],
+  ];
+
+  function params(extra) {
+    const p = new URLSearchParams();
+    for (const [id, key] of FILTROS) if ($(id).value.trim()) p.set(key, $(id).value.trim());
+    for (const [k, v] of Object.entries(extra || {})) if (v != null && v !== '') p.set(k, v);
+    return p;
+  }
+  const verLink = (extra, txt) =>
+    `<a class="verpersonas" href="/respuestas?${params(extra)}">${txt || 'Ver las personas →'}</a>`;
+
+  /** Cambia un filtro (o lo quita si ya tenía ese valor) y recarga. */
+  function filtrar(id, valor) {
+    $(id).value = $(id).value === valor ? '' : valor;
+    cargar();
+  }
+
+  function insights(d) {
+    const k = d.kpis;
+    const li = [];
+    li.push(`Se enviaron <b>${fmt(k.enviados)}</b> mensajes; <b>${fmt(k.entregados)}</b> (${pct(k.entregados, k.enviados)}%) llegaron al WhatsApp del contacto y <b>${fmt(k.leidos)}</b> se leyeron.`);
+    li.push(`<b>${fmt(k.interesados)}</b> personas mostraron interés (${pct(k.interesados, k.entregados)}% de los entregados): ${fmt(k.participar)} quieren participar y ${fmt(k.mas_info)} pidieron más información. ${verLink({ respuesta: 'interesados' }, 'ver la lista para el asesor →')}`);
+    if (k.opt_out) li.push(`<b>${fmt(k.opt_out)}</b> (${pct(k.opt_out, k.entregados)}%) pidieron no recibir más mensajes; quedan excluidos de próximos envíos.`);
+    if (k.sin_whatsapp) li.push(`<b>${fmt(k.sin_whatsapp)}</b> números no tienen WhatsApp activo: conviene depurarlos de la base. ${verLink({ entrega: 'sin_whatsapp' }, 'ver →')}`);
+    const mejor = [...d.porHoja].filter((h) => h.entregados >= 20).sort((a, b) => b.interesados / b.entregados - a.interesados / a.entregados)[0];
+    if (mejor) li.push(`La base que mejor responde es <b>${esc(mejor.hoja)}</b>: ${pct(mejor.interesados, mejor.entregados)}% de interés sobre entregados.`);
+    const sem = d.seminarios[0];
+    if (sem && sem.interesados) li.push(`Los asistentes a «<b>${esc(sem.k.slice(0, 80))}</b>» son los que más interés mostraron (${fmt(sem.interesados)} personas).`);
+    if (k.pendientes_envio) li.push(`Quedan <b>${fmt(k.pendientes_envio)}</b> contactos por enviar en esta campaña.`);
+    return `<div class="lectura"><h2>Lectura rápida</h2><ul>${li.map((x) => `<li>${x}</li>`).join('')}</ul></div>`;
+  }
+
+  async function cargar() {
+    let d;
+    try {
+      const r = await fetch('/api/analisis?' + params());
+      if (r.status === 401) { mostrar('login'); return; }
+      d = await r.json();
+      if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status));
+    } catch (e) {
+      $('cont').innerHTML = '<div class="err">No se pudo cargar: ' + esc(e.message) + '</div>';
+      return;
+    }
+    if (!$('f-campana').value) $('f-campana').value = String(d.campana.id);
+    $('nombre-campana').textContent = d.campana.nombre;
+
+    const k = d.kpis;
+    const kpi = (n, l, den) => `<div class="kpi"><div class="n">${fmt(n)}${den ? `<span class="p"> · ${pct(n, den)}%</span>` : ''}</div><div class="l">${l}</div></div>`;
+
+    $('cont').innerHTML = `
+      ${insights(d)}
+      <div class="kpis">
+        ${kpi(k.enviados, 'Mensajes enviados', k.universo)}
+        ${kpi(k.entregados, 'Entregados', k.enviados)}
+        ${kpi(k.leidos, 'Leídos', k.entregados)}
+        ${kpi(k.interesados, 'Interesados', k.entregados)}
+        ${kpi(k.opt_out, 'No desean mensajes', k.entregados)}
+      </div>
+
+      <div class="grid2">
+        <section>
+          <h2>Embudo <span>· clic en una etapa para filtrar</span></h2>
+          <div id="g-embudo" class="chart alto"></div>
+        </section>
+        <section>
+          <h2>¿Qué respondieron? <span>· clic para filtrar</span></h2>
+          <div id="g-respuestas" class="chart alto"></div>
+          <div class="verfila">${verLink({ respuesta: 'participar' }, 'Quieren participar →')} ${verLink({ respuesta: 'mas_info' }, 'Más información →')} ${verLink({ respuesta: 'texto' }, 'Escribieron →')}</div>
+        </section>
+      </div>
+
+      <section>
+        <h2>Resultado por base de origen <span>· clic en una barra para filtrar</span></h2>
+        <div id="g-hojas" class="chart"></div>
+      </section>
+
+      <section>
+        <h2>¿Qué público responde mejor? Seminarios a los que asistieron <span>· clic para filtrar</span></h2>
+        <div id="g-seminarios" class="chart alto"></div>
+        <p class="nota">Seminarios previos de las personas que recibieron el mensaje (con al menos 5 entregados). Sirve para elegir a quién invitar primero en la próxima campaña.</p>
+      </section>
+
+      <div class="grid2">
+        <section>
+          <h2>Empresas con más interesados</h2>
+          <div id="g-empresas" class="chart"></div>
+        </section>
+        <section>
+          <h2>Errores de entrega</h2>
+          ${d.errores.length ? `<table class="err-tab"><tbody>${d.errores.map((e) =>
+            `<tr><td>${e.code === 131026 ? 'Sin WhatsApp activo' : esc(e.texto || 'Error')} <span style="color:var(--muted)">(${e.code ?? '—'})</span></td><td>${fmt(e.n)}</td></tr>`).join('')}</tbody></table>
+            <div class="verfila">${verLink({ entrega: 'fallido' }, 'Ver fallidos →')}</div>` : '<p class="vacio">Sin errores de entrega.</p>'}
+        </section>
+      </div>
+
+      <section>
+        <h2>Actividad por día</h2>
+        <div id="g-diario" class="chart"></div>
+      </section>`;
+
+    G.embudo('g-embudo', [
+      { nombre: 'Enviados', valor: k.enviados, clave: ['f-entrega', 'enviado'] },
+      { nombre: 'Entregados', valor: k.entregados, clave: ['f-entrega', 'entregado'] },
+      { nombre: 'Leídos', valor: k.leidos, clave: ['f-entrega', 'leido'] },
+      { nombre: 'Respondieron', valor: k.respondieron, clave: null },
+      { nombre: 'Interesados', valor: k.interesados, clave: ['f-respuesta', 'interesados'] },
+    ], (p) => p.data.clave && filtrar(...p.data.clave));
+
+    G.dona('g-respuestas', [
+      { nombre: 'Quiere participar', valor: k.participar, color: css('--ok'), clave: 'participar' },
+      { nombre: 'Más información', valor: k.mas_info, color: css('--c2'), clave: 'mas_info' },
+      { nombre: 'Escribió un mensaje', valor: k.texto, color: css('--pend'), clave: 'texto' },
+      { nombre: 'No desea mensajes', valor: k.opt_out, color: css('--bad'), clave: 'opt_out' },
+      { nombre: 'Sin respuesta', valor: Math.max(0, k.entregados - k.respondieron), color: css('--none'), clave: 'sin_respuesta' },
+    ].filter((s) => s.valor > 0), 'entregados', (p) => filtrar('f-respuesta', p.data.clave));
+
+    const h = d.porHoja.filter((x) => x.enviados > 0);
+    G.barrasApiladas('g-hojas', h.map((x) => x.hoja), [
+      { nombre: 'Interesados', datos: h.map((x) => x.interesados), color: css('--ok') },
+      { nombre: 'No desean', datos: h.map((x) => x.opt_out), color: css('--bad') },
+      { nombre: 'Entregados sin interés', datos: h.map((x) => Math.max(0, x.entregados - x.interesados - x.opt_out)), color: css('--c2') },
+      { nombre: 'No entregados', datos: h.map((x) => Math.max(0, x.enviados - x.entregados)), color: css('--none') },
+    ], (p) => filtrar('f-hoja', p.name));
+
+    const s = d.seminarios;
+    G.barrasApiladas('g-seminarios', s.map((x) => x.k.length > 60 ? x.k.slice(0, 58) + '…' : x.k), [
+      { nombre: 'Interesados', datos: s.map((x) => x.interesados), color: css('--ok') },
+      { nombre: 'Entregados sin interés', datos: s.map((x) => Math.max(0, x.entregados - x.interesados)), color: css('--c2') },
+    ], (p) => { $('f-seminario').value = s[p.dataIndex].k.slice(0, 40); cargar(); });
+
+    G.barras('g-empresas', d.empresas.map((x) => ({ nombre: x.k, valor: x.n })), 'Interesados', null, css('--ok'));
+
+    G.actividadDiaria('g-diario', d.diario.map((x) => x.dia), [
+      { nombre: 'Envíos', datos: Object.fromEntries(d.diario.map((x) => [x.dia, x.envios])), color: css('--c2') },
+      { nombre: 'Respuestas', datos: Object.fromEntries(d.diario.map((x) => [x.dia, x.respuestas])), color: css('--c1') },
+    ]);
+
+    pintarChips();
+    $('ver-filtro').href = '/respuestas?' + params().toString();
+    $('pie').textContent = 'Actualizado ' + new Date(d.generado).toLocaleString('es-CO');
+  }
+
+  const VALOR_TXT = {
+    interesados: 'Interesados', participar: 'Quieren participar', mas_info: 'Más información', texto: 'Escribieron',
+    opt_out: 'No desean', sin_respuesta: 'Sin respuesta', enviado: 'Enviados', entregado: 'Entregados', leido: 'Leídos',
+    fallido: 'Fallidos', sin_whatsapp: 'Sin WhatsApp', no_enviado: 'No enviados',
+  };
+  function pintarChips() {
+    const items = FILTROS.filter(([id, , lbl]) => lbl && id !== 'f-campana' && $(id).value).map(([id, , lbl]) =>
+      `<button class="chipf" data-limpiar="${id}">${lbl}: ${esc(VALOR_TXT[$(id).value] || $(id).value)} ✕</button>`);
+    $('chips').innerHTML = items.length
+      ? '<span>Filtros activos:</span> ' + items.join(' ') + ' <button class="chipf" data-limpiar="*">Limpiar todo</button>'
+      : '';
+  }
+  $('chips').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-limpiar]');
+    if (!b) return;
+    if (b.dataset.limpiar === '*') FILTROS.forEach(([id]) => { if (id !== 'f-campana' && id !== 'f-campofecha') $(id).value = ''; });
+    else $(b.dataset.limpiar).value = '';
+    cargar();
+  });
+
+  $('q-7d').onclick = () => { $('f-desde').value = iso(new Date(Date.now() - 6 * 864e5)); $('f-hasta').value = iso(new Date()); cargar(); };
+  $('q-30d').onclick = () => { $('f-desde').value = iso(new Date(Date.now() - 29 * 864e5)); $('f-hasta').value = iso(new Date()); cargar(); };
+  $('q-limpiar').onclick = () => { $('f-desde').value = ''; $('f-hasta').value = ''; cargar(); };
+  $('aplicar').onclick = cargar;
+  $('f-campana').onchange = cargar;
+  $('f-seminario').addEventListener('keydown', (e) => { if (e.key === 'Enter') cargar(); });
+  $('recargar').onclick = cargar;
+  $('imprimir').onclick = () => {
+    $('print-fecha').textContent = 'Campaña de WhatsApp · CETEX · ' + $('nombre-campana').textContent + ' · generado ' + new Date().toLocaleString('es-CO');
+    window.print();
+  };
+
+  // login
+  async function entrar() {
+    $('login-msg').textContent = '';
+    const b = $('entrar'); b.disabled = true; b.textContent = 'Entrando…';
+    try {
+      const r = await fetch('/api/login', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ usuario: $('u').value, password: $('p').value }),
+      });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error || 'No se pudo entrar');
+      $('p').value = ''; mostrar('panel'); cargar();
+    } catch (e) { $('login-msg').textContent = e.message; }
+    finally { b.disabled = false; b.textContent = 'Entrar'; }
+  }
+  $('entrar').onclick = entrar;
+  $('p').addEventListener('keydown', (e) => { if (e.key === 'Enter') entrar(); });
+  $('salir').onclick = async (e) => { e.preventDefault(); await fetch('/api/logout', { method: 'POST' }); mostrar('login'); };
+
+  (async () => {
+    try {
+      const lista = await (await fetch('/api/campanas')).json();
+      $('f-campana').innerHTML = lista.map((c) => `<option value="${c.id}">${esc(c.nombre)}</option>`).join('');
+    } catch { /* sin campañas */ }
+    try {
+      const c = await (await fetch('/api/config')).json();
+      const op = c.operador || {};
+      const cli = c.cliente || {};
+      if (op.nombre) $('op-nombre').textContent = op.nombre;
+      if (cli.nombre) $('op-linea').textContent = `Operador de la plataforma de mensajería por cuenta de ${cli.nombre}.`;
+      const partes = [
+        [op.direccion, op.ciudad].filter(Boolean).join(', '),
+        op.telefono && ('Tel. ' + op.telefono), op.correo, op.web, op.nit && ('NIT ' + op.nit),
+      ].filter(Boolean);
+      $('lm-contacto').textContent = partes.join('  ·  ');
+    } catch { /* sin config */ }
+    try {
+      const s = await (await fetch('/api/session')).json();
+      if (s.autenticado) { mostrar('panel'); cargar(); } else mostrar('login');
+    } catch { mostrar('login'); }
+  })();
+</script>
+</body>
+</html>

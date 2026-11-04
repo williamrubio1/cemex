@@ -1,0 +1,319 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="robots" content="noindex" />
+<title>Campaña CETEX — Seguimiento</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/echarts/5.5.0/echarts.min.js"></script>
+<script src="/graficas.js"></script>
+<style>
+  :root {
+    --bg: #f6f6f3; --surface: #fff; --border: #e6e5df;
+    --text: #29292a; --muted: #70706a; --accent: #3f6b5e; --track: #ecebe5;
+    --shadow: 0 1px 2px rgba(20,20,15,.04), 0 1px 8px rgba(20,20,15,.03);
+    --c1:#3f6b5e; --c2:#6b7f9e; --c3:#a98b5d; --c4:#9e6b6b;
+    --c5:#7d8a6a; --c6:#7a7a90; --c7:#a3a39a;
+    --ok:#3f7d5e; --pend:#b58a3c; --none:#b9b9b0; --bad:#a95c54;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg:#191a19; --surface:#232421; --border:#34352f;
+      --text:#e9e8e2; --muted:#9b9b92; --accent:#77b0a0; --track:#2d2e29; --shadow:none;
+      --c1:#77b0a0; --c2:#8fa3c2; --c3:#c6a877; --c4:#c08a8a;
+      --c5:#9aa985; --c6:#9a9ab0; --c7:#6f6f68;
+      --ok:#6fae8f; --pend:#cfa661; --none:#5c5c56; --bad:#c58a82;
+    }
+  }
+  * { box-sizing: border-box; }
+  html,body { margin:0; }
+  body {
+    background:var(--bg); color:var(--text);
+    font:15px/1.55 ui-sans-serif,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap { max-width:1040px; margin:0 auto; padding:32px 16px 56px; }
+  header { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; margin-bottom:26px; flex-wrap:wrap; }
+  header h1 { font-size:20px; font-weight:600; margin:0 0 4px; letter-spacing:-.01em; }
+  header p { margin:0; color:var(--muted); font-size:14px; }
+  .nav { display:flex; gap:8px; flex-wrap:wrap; }
+  button#recargar, .navbtn, select#f-campana {
+    font:inherit; font-size:13.5px; color:var(--text); background:var(--surface);
+    border:1px solid var(--border); border-radius:8px; padding:8px 14px; cursor:pointer;
+    box-shadow:var(--shadow); display:inline-flex; align-items:center; gap:7px; text-decoration:none;
+  }
+  .navbtn { color:var(--accent); font-weight:600; }
+  button#recargar:hover, .navbtn:hover { border-color:var(--muted); }
+  button#recargar[disabled] { opacity:.6; cursor:default; }
+  .acceso { margin:-14px 0 22px; font-size:12.5px; color:var(--muted); }
+  .spin { width:12px; height:12px; border:2px solid var(--muted); border-top-color:transparent;
+          border-radius:50%; animation:g .7s linear infinite; }
+  @keyframes g { to { transform:rotate(360deg); } }
+
+  .avance { background:var(--surface); border:1px solid var(--border); border-radius:12px;
+            padding:20px; box-shadow:var(--shadow); margin-bottom:20px; }
+  .avance .big { font-size:30px; font-weight:650; letter-spacing:-.02em; }
+  .avance .sub { color:var(--muted); font-size:14px; margin-top:2px; }
+  .avance .barra { margin-top:14px; height:10px; background:var(--track); border-radius:6px; overflow:hidden; }
+  .avance .barra > i { display:block; height:100%; background:var(--accent); border-radius:6px; transition:width .5s ease; }
+  .avance-btn { display:block; width:100%; text-align:left; background:none; border:none;
+    padding:0; margin:0; cursor:pointer; font:inherit; color:inherit; }
+  .avance-btn::after { content:"\24D8"; opacity:.45; margin-left:8px; font-size:14px; vertical-align:2px; }
+
+  .kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:12px; }
+  .kpi { background:var(--surface); border:1px solid var(--border); border-radius:12px;
+    padding:14px 15px; box-shadow:var(--shadow); }
+  button.kpi { width:100%; text-align:left; font:inherit; color:inherit; cursor:pointer; }
+  button.kpi:hover { border-color:var(--muted); }
+  button.kpi[aria-expanded="true"] { border-color:var(--accent); }
+  .kpi .n { font-size:21px; font-weight:620; letter-spacing:-.01em; font-variant-numeric:tabular-nums; }
+  .kpi .n .p { font-size:12.5px; font-weight:500; color:var(--muted); }
+  .kpi .l { color:var(--muted); font-size:12.5px; margin-top:3px; }
+  .kpi .l::after { content:" \24D8"; opacity:.4; }
+  .kpis-wrap { margin-bottom:20px; }
+  .kpis-wrap > .glosa, .avance > .glosa { margin-top:12px; }
+
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:18px; }
+  @media (max-width:760px) { .grid2 { grid-template-columns:1fr; } }
+  section { background:var(--surface); border:1px solid var(--border); border-radius:12px;
+            padding:20px; box-shadow:var(--shadow); margin-bottom:18px; min-width:0; }
+  section h2 { font-size:12px; font-weight:600; margin:0 0 6px; color:var(--muted);
+               text-transform:uppercase; letter-spacing:.06em; }
+  .chart { width:100%; height:300px; }
+  .chart.alto { height:340px; }
+  .chart.bajo { height:240px; }
+  .vacio { color:var(--muted); margin:0; padding:24px 0; }
+  .glosa { margin-top:14px; padding:12px 14px; background:var(--track); border-radius:8px;
+    font-size:13px; line-height:1.5; }
+  .nota { margin:8px 0 0; font-size:12px; color:var(--muted); }
+
+  footer { color:var(--muted); font-size:12.5px; text-align:center; margin-top:26px; }
+  .err { background:var(--surface); border:1px solid var(--border); border-left:3px solid #b4534b;
+         border-radius:10px; padding:16px; color:var(--muted); }
+  [hidden] { display:none !important; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Campaña de WhatsApp &middot; CETEX</h1>
+      <p id="subtitulo">Seguimiento en vivo &middot; operado por Soluctia S.A.S.</p>
+    </div>
+    <div class="nav">
+      <select id="f-campana" title="Campaña">
+        <option value="">Todas las campañas</option>
+      </select>
+      <a class="navbtn" href="/respuestas">Respuestas</a>
+      <a class="navbtn" href="/analisis">Análisis y gráficos</a>
+      <button id="recargar" type="button">Actualizar</button>
+    </div>
+  </header>
+  <p class="acceso">Las vistas <b>Respuestas</b> y <b>Análisis</b> son de uso interno y piden usuario y contraseña.</p>
+
+  <div id="err" class="err" hidden></div>
+
+  <div id="app" hidden>
+    <div class="avance grupo-glosa">
+      <button class="avance-btn" type="button" data-k="kpi_avance" data-t="Interés sobre mensajes entregados" aria-expanded="false">
+        <div class="big" id="av-big">0%</div>
+        <div class="sub" id="av-sub"></div>
+      </button>
+      <div class="barra"><i id="av-barra" style="width:0"></i></div>
+      <div class="glosa" hidden></div>
+    </div>
+
+    <div class="kpis-wrap grupo-glosa">
+      <div class="kpis" id="kpis"></div>
+      <div class="glosa" hidden></div>
+    </div>
+
+    <div class="grid2">
+      <section>
+        <h2>Embudo de la campaña</h2>
+        <div id="g-embudo" class="chart alto"></div>
+        <p class="nota">Pase el cursor por cada etapa para ver qué porcentaje avanzó desde la anterior.</p>
+      </section>
+      <section>
+        <h2>¿Qué respondieron?</h2>
+        <div id="g-respuestas" class="chart alto"></div>
+        <p class="nota">Sobre los mensajes entregados. «Sin respuesta» = lo recibieron y no tocaron ningún botón.</p>
+      </section>
+    </div>
+
+    <section>
+      <h2>Actividad por día</h2>
+      <div id="g-diario" class="chart"></div>
+      <p class="nota">Barras: cantidad del día. Líneas: acumulado (eje derecho).</p>
+    </section>
+
+    <section>
+      <h2>¿Cuándo responden? Día de la semana × hora</h2>
+      <div id="g-calor" class="chart bajo"></div>
+      <p class="nota">Mensajes recibidos de los contactos, en hora de Colombia. Úselo para elegir la hora del próximo envío.</p>
+    </section>
+
+    <section>
+      <h2>Respuestas hora a hora</h2>
+      <div id="g-horas" class="chart bajo"></div>
+      <p class="nota">Las líneas <b style="color:var(--c4)">T1, T2…</b> marcan el inicio de cada tanda de envío. Arrastre o use la rueda para recorrer el tiempo.</p>
+    </section>
+
+    <div class="grid2">
+      <section>
+        <h2>Entrega en WhatsApp</h2>
+        <div id="g-entrega" class="chart bajo"></div>
+      </section>
+      <section>
+        <h2>Resultado por base de origen</h2>
+        <div id="g-hojas" class="chart bajo"></div>
+      </section>
+    </div>
+  </div>
+
+  <footer id="pie"></footer>
+</div>
+
+<script>
+  const G = window.Graficas;
+  const { fmt } = G;
+  const pct = (n, t) => (t ? Math.round((n / t) * 100) : 0);
+  const $ = (id) => document.getElementById(id);
+
+  const GLOSARIO = {
+    kpi_avance: 'De las personas que recibieron el mensaje en su WhatsApp, cuántas mostraron interés: tocaron «Más información» o «Quiero participar». Se calcula sobre los mensajes entregados, no sobre el total enviado.',
+    base: 'Contactos con celular válido importados de las bases de CETEX (sin repetidos).',
+    enviados: 'Plantillas de WhatsApp enviadas a los contactos en esta campaña.',
+    entregados: 'Mensajes que WhatsApp confirma como recibidos en el teléfono del contacto.',
+    leidos: 'De los entregados, los que la persona abrió (solo si tiene activadas las confirmaciones de lectura).',
+    interesados: 'Tocaron «Más información» o «Quiero participar». Son las personas a las que un asesor debe dar seguimiento.',
+    opt_out: 'Pidieron no recibir más mensajes. Quedan excluidos de todas las campañas futuras.',
+  };
+
+  async function cargarCampanas() {
+    try {
+      const r = await fetch('/api/campanas', { cache: 'no-store' });
+      const lista = await r.json();
+      const sel = $('f-campana');
+      for (const c of lista) sel.insertAdjacentHTML('beforeend', `<option value="${c.id}">${c.nombre.replace(/</g, '&lt;')}</option>`);
+    } catch { /* sin campañas */ }
+  }
+
+  async function cargar() {
+    let d;
+    try {
+      const cp = $('f-campana').value;
+      const r = await fetch('/stats' + (cp ? '?campana=' + cp : ''), { cache: 'no-store' });
+      const b = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(b.error || ('HTTP ' + r.status));
+      d = b;
+    } catch (e) {
+      $('err').textContent = 'No se pudieron cargar los datos en este momento. ' + e.message;
+      $('err').hidden = false;
+      return;
+    }
+    $('err').hidden = true;
+    $('app').hidden = false;
+
+    const k = d.kpis;
+    const ent = k.entregados;
+
+    $('av-big').textContent = pct(k.interesados, ent) + '%';
+    $('av-sub').textContent = `${fmt(k.interesados)} de ${fmt(ent)} mensajes entregados mostraron interés en el seminario`;
+    $('av-barra').style.width = pct(k.interesados, ent) + '%';
+
+    const kpi = (n, l, key, den) => `<button class="kpi" type="button" data-k="${key}" data-t="${l}" aria-expanded="false">
+      <div class="n">${fmt(n)}${den ? `<span class="p"> · ${pct(n, den)}%</span>` : ''}</div><div class="l">${l}</div></button>`;
+    $('kpis').innerHTML =
+      kpi(d.base.total, 'Contactos en la base', 'base') +
+      kpi(k.enviados, 'Mensajes enviados', 'enviados') +
+      kpi(ent, 'Entregados', 'entregados', k.enviados) +
+      kpi(k.leidos, 'Leídos', 'leidos', ent) +
+      kpi(k.interesados, 'Interesados', 'interesados', ent) +
+      kpi(k.opt_out, 'No desean mensajes', 'opt_out', ent);
+
+    const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+
+    G.embudo('g-embudo', [
+      { nombre: 'Enviados', valor: k.enviados },
+      { nombre: 'Entregados', valor: ent },
+      { nombre: 'Leídos', valor: k.leidos },
+      { nombre: 'Respondieron', valor: k.respondieron },
+      { nombre: 'Interesados', valor: k.interesados },
+    ]);
+
+    const sinResp = Math.max(0, ent - k.respondieron);
+    G.dona('g-respuestas', [
+      { nombre: 'Quiere participar', valor: k.participar, color: css('--ok') },
+      { nombre: 'Más información', valor: k.mas_info, color: css('--c2') },
+      { nombre: 'Escribió un mensaje', valor: k.texto, color: css('--pend') },
+      { nombre: 'No desea mensajes', valor: k.opt_out, color: css('--bad') },
+      { nombre: 'Sin respuesta', valor: sinResp, color: css('--none') },
+    ].filter((s) => s.valor > 0), 'entregados');
+
+    const porDia = (serie) => Object.fromEntries(serie.map((x) => [x.dia, x.c]));
+    const dias = [...new Set([...d.enviosDiario, ...d.respuestasDiario].map((x) => x.dia))].sort();
+    G.actividadDiaria('g-diario', dias, [
+      { nombre: 'Envíos', datos: porDia(d.enviosDiario), color: css('--c2') },
+      { nombre: 'Respuestas', datos: porDia(d.respuestasDiario), color: css('--c1') },
+    ]);
+
+    G.mapaCalor('g-calor', d.mapaCalor);
+    G.lineaTiempo('g-horas', d.respuestasPorHora, d.tandas);
+
+    G.barras('g-entrega', [
+      { nombre: 'Entregados', valor: ent },
+      { nombre: 'Leídos', valor: k.leidos },
+      { nombre: 'Sin WhatsApp activo', valor: k.sin_whatsapp },
+      { nombre: 'Otros fallidos', valor: Math.max(0, k.fallidos - k.sin_whatsapp) },
+      { nombre: 'Sin confirmar aún', valor: k.sin_confirmar },
+    ], 'Mensajes');
+
+    G.barrasApiladas('g-hojas', d.porHoja.map((h) => h.hoja), [
+      { nombre: 'Interesados', datos: d.porHoja.map((h) => h.interesados), color: css('--ok') },
+      { nombre: 'No desean', datos: d.porHoja.map((h) => h.opt_out), color: css('--bad') },
+      { nombre: 'Entregados sin interés', datos: d.porHoja.map((h) => Math.max(0, h.entregados - h.interesados - h.opt_out)), color: css('--c2') },
+      { nombre: 'No entregados', datos: d.porHoja.map((h) => Math.max(0, h.enviados - h.entregados)), color: css('--none') },
+    ]);
+
+    $('pie').textContent = 'Datos agregados, sin información personal. Actualizado ' +
+      new Date(d.generado).toLocaleString('es-CO') + ' · se actualiza solo cada minuto.';
+  }
+
+  const btn = $('recargar');
+  async function recargar() {
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spin"></span> Actualizando…';
+    await cargar();
+    btn.disabled = false;
+    btn.textContent = 'Actualizar';
+  }
+  btn.addEventListener('click', recargar);
+  $('f-campana').addEventListener('change', () => {
+    const o = $('f-campana').selectedOptions[0];
+    $('subtitulo').textContent = 'Seguimiento en vivo · operado por Soluctia S.A.S.' + ($('f-campana').value ? ' · ' + o.textContent : '');
+    cargar();
+  });
+
+  // Glosario: al tocar un indicador, muestra su significado en el panel de su grupo.
+  $('app').addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-k]');
+    if (!b) return;
+    const g = b.closest('.grupo-glosa')?.querySelector('.glosa');
+    if (!g) return;
+    const k = b.dataset.k;
+    const abierto = !g.hidden && g.dataset.k === k;
+    document.querySelectorAll('.glosa').forEach((x) => { x.hidden = true; });
+    document.querySelectorAll('button[data-k][aria-expanded="true"]').forEach((x) => x.setAttribute('aria-expanded', 'false'));
+    if (abierto) return;
+    g.dataset.k = k;
+    g.innerHTML = `<b>${(b.dataset.t || '').trim()}:</b> ${GLOSARIO[k] || 'Sin descripción disponible.'}`;
+    g.hidden = false;
+    b.setAttribute('aria-expanded', 'true');
+  });
+
+  cargarCampanas().then(cargar);
+  setInterval(cargar, 60000);
+</script>
+</body>
+</html>

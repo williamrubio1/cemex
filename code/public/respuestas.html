@@ -1,0 +1,327 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="robots" content="noindex" />
+<title>Respuestas — Campaña CETEX (interno)</title>
+<style>
+  :root {
+    --bg:#f6f6f3; --surface:#fff; --border:#e6e5df;
+    --text:#29292a; --muted:#70706a; --accent:#3f6b5e; --track:#ecebe5;
+    --shadow:0 1px 2px rgba(20,20,15,.04),0 1px 8px rgba(20,20,15,.03);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#191a19; --surface:#232421; --border:#34352f;
+      --text:#e9e8e2; --muted:#9b9b92; --accent:#77b0a0; --track:#2d2e29; --shadow:none; }
+  }
+  * { box-sizing:border-box; }
+  html,body { margin:0; }
+  body { background:var(--bg); color:var(--text);
+    font:14px/1.5 ui-sans-serif,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; }
+  .wrap { max-width:1160px; margin:0 auto; padding:28px 18px 56px; }
+  h1 { font-size:18px; font-weight:600; margin:0 0 4px; }
+  .sub { color:var(--muted); font-size:13px; margin:0 0 20px; }
+  select, input, button, a.btn {
+    font:inherit; font-size:13px; color:var(--text); background:var(--surface);
+    border:1px solid var(--border); border-radius:8px; padding:7px 10px;
+  }
+  input { min-width:180px; }
+  input[type="date"] { min-width:0; }
+  button, a.btn { cursor:pointer; text-decoration:none; box-shadow:var(--shadow); }
+  button:hover, a.btn:hover { border-color:var(--muted); }
+  button.primario { background:var(--accent); color:#fff; border-color:var(--accent); font-weight:600; }
+  button.chip { font-size:12px; padding:6px 10px; box-shadow:none; color:var(--muted); }
+  button.chip:hover { color:var(--text); }
+  a.btn { color:var(--accent); font-weight:600; }
+  .barra label { display:flex; align-items:center; gap:6px; font-size:12.5px; color:var(--muted); }
+  .barra label input[type="date"] { padding:6px 8px; }
+  .chk { cursor:pointer; }
+
+  /* Login */
+  .login { max-width:340px; margin:8vh auto 0; background:var(--surface);
+    border:1px solid var(--border); border-radius:12px; padding:26px; box-shadow:var(--shadow); }
+  .login h2 { font-size:16px; margin:0 0 4px; }
+  .login p { color:var(--muted); font-size:13px; margin:0 0 18px; }
+  .login label { display:block; font-size:12px; color:var(--muted); margin:12px 0 5px; }
+  .login input { width:100%; }
+  .login button { width:100%; margin-top:18px; padding:9px; }
+  .login .msg { color:#c0392b; font-size:13px; margin-top:12px; min-height:18px; }
+  .login a { color:var(--accent); }
+
+  /* Tabla */
+  .barra { display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-bottom:16px; }
+  .conteo { color:var(--muted); font-size:13px; margin-left:auto; }
+  .tabla-cont { background:var(--surface); border:1px solid var(--border); border-radius:12px;
+    box-shadow:var(--shadow); overflow-x:auto; }
+  table { width:100%; border-collapse:collapse; font-size:13px; min-width:920px; }
+  th, td { text-align:left; padding:9px 12px; border-bottom:1px solid var(--border); vertical-align:top; }
+  th { color:var(--muted); font-weight:600; font-size:11px; text-transform:uppercase;
+    letter-spacing:.04em; position:sticky; top:0; background:var(--surface); }
+  tr:last-child td { border-bottom:none; }
+  td.proc { max-width:280px; white-space:pre-wrap; }
+  .pill { display:inline-block; padding:2px 8px; border-radius:20px; background:var(--track);
+    font-size:11.5px; white-space:nowrap; }
+  .si { color:var(--accent); font-weight:600; }
+  .no { color:var(--muted); }
+  .pag { display:flex; gap:10px; align-items:center; justify-content:center; margin-top:16px; color:var(--muted); }
+  .err { background:var(--surface); border:1px solid var(--border); border-left:3px solid #b4534b;
+    border-radius:10px; padding:16px; color:var(--muted); }
+  [hidden] { display:none !important; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- Login -->
+  <div id="vista-login" hidden>
+    <div class="login">
+      <h2>Acceso interno</h2>
+      <p>Ingrese sus credenciales para ver las respuestas de la campaña.</p>
+      <label for="u">Usuario</label>
+      <input id="u" type="text" autocomplete="username" autofocus />
+      <label for="p">Contraseña</label>
+      <input id="p" type="password" autocomplete="current-password" />
+      <button id="entrar" class="primario" type="button">Entrar</button>
+      <div class="msg" id="login-msg"></div>
+      <p style="margin-top:16px"><a href="/">← Ver panel público</a></p>
+    </div>
+  </div>
+
+  <!-- Tabla -->
+  <div id="vista-tabla" hidden>
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap">
+      <div>
+        <h1>Respuestas de la campaña CETEX — vista interna</h1>
+        <p class="sub">
+          Datos personales. Sesión de <b id="quien"></b>.
+          <a href="#" id="salir" style="color:var(--accent)">Cerrar sesión</a> ·
+          <a href="/" style="color:var(--accent)">Panel público</a>
+        </p>
+      </div>
+      <a class="btn" href="/analisis">Ver análisis y gráficos →</a>
+    </div>
+
+    <div class="barra">
+      <select id="f-campana"></select>
+      <select id="f-respuesta">
+        <option value="">Respuesta: todas</option>
+        <option value="interesados">Interesados (para el asesor)</option>
+        <option value="participar">Quieren participar</option>
+        <option value="mas_info">Pidieron más información</option>
+        <option value="texto">Escribieron un mensaje</option>
+        <option value="opt_out">No desean mensajes</option>
+        <option value="sin_respuesta">Sin respuesta</option>
+      </select>
+      <select id="f-entrega">
+        <option value="">Entrega: todas</option>
+        <option value="enviado">Enviados</option>
+        <option value="entregado">Entregados</option>
+        <option value="leido">Leídos</option>
+        <option value="fallido">Fallidos</option>
+        <option value="sin_whatsapp">Sin WhatsApp</option>
+        <option value="no_enviado">Aún no enviados</option>
+      </select>
+      <select id="f-estado">
+        <option value="">Estado del contacto: todos</option>
+        <option value="no_contactado">Sin contactar</option>
+        <option value="contactado">Contactado</option>
+        <option value="interesado">Interesado</option>
+        <option value="opt_out">No desea mensajes</option>
+        <option value="sin_whatsapp">Sin WhatsApp</option>
+      </select>
+      <select id="f-hoja">
+        <option value="">Base de origen: todas</option>
+        <option>BASE CETEX 1</option>
+        <option>BOGOTA</option>
+        <option>BASE COMEX BOGOTA</option>
+        <option>BASE MEDELLIN</option>
+        <option>MED-REGIMEN</option>
+        <option>NORMAS PYMES</option>
+      </select>
+      <input id="f-seminario" type="search" placeholder="Seminario previo contiene…" />
+      <input id="f-q" type="search" placeholder="Buscar nombre, celular, empresa o correo" />
+    </div>
+
+    <div class="barra">
+      <select id="f-campofecha">
+        <option value="envio">Fecha de envío</option>
+        <option value="respuesta">Fecha de respuesta</option>
+      </select>
+      <label>Desde <input type="date" id="f-desde" /></label>
+      <label>Hasta <input type="date" id="f-hasta" /></label>
+      <button id="q-ayer" type="button" class="chip">Ayer</button>
+      <button id="q-hoy" type="button" class="chip">Hoy</button>
+      <button id="q-7d" type="button" class="chip">Últimos 7 días</button>
+      <button id="q-limpiar" type="button" class="chip">Limpiar fechas</button>
+      <button id="aplicar" type="button" class="primario">Aplicar</button>
+      <a class="btn" id="descarga" href="#">Descargar Excel</a>
+      <span class="conteo" id="conteo"></span>
+    </div>
+
+    <div id="cont"></div>
+    <div class="pag" id="pag"></div>
+  </div>
+</div>
+
+<script>
+  const ETIQ = {
+    no_contactado:'Sin contactar', contactado:'Contactado', interesado:'Interesado',
+    opt_out:'No desea mensajes', sin_whatsapp:'Sin WhatsApp',
+  };
+  const RESP = {
+    participar:'Quiere participar', mas_info:'Más información', opt_out:'No desea mensajes', texto:'Escribió',
+  };
+  const ENVIO = { enviado:'Enviado', entregado:'Entregado', leido:'Leído', fallido:'Fallido' };
+  // Filtros: [id del control, parámetro de la URL]
+  const FILTROS = [
+    ['f-campana','campana'], ['f-respuesta','respuesta'], ['f-entrega','entrega'], ['f-estado','estado'],
+    ['f-hoja','hoja'], ['f-seminario','seminario'], ['f-q','q'],
+    ['f-campofecha','campoFecha'], ['f-desde','desde'], ['f-hasta','hasta'],
+  ];
+  let pagina = 1;
+  const $ = (id) => document.getElementById(id);
+  const et = (k) => ETIQ[k] || k || '—';
+  const fecha = (v) => v ? new Date(v).toLocaleString('es-CO', { dateStyle:'short', timeStyle:'short' }) : '';
+  const esc = (s) => String(s ?? '').replace(/[<>&"]/g, (c) => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+
+  function mostrar(vista) {
+    $('vista-login').hidden = vista !== 'login';
+    $('vista-tabla').hidden = vista !== 'tabla';
+  }
+
+  async function init() {
+    try {
+      const lista = await (await fetch('/api/campanas')).json();
+      $('f-campana').innerHTML = lista.map((c) => `<option value="${c.id}">${esc(c.nombre)}</option>`).join('');
+    } catch { /* sin campañas */ }
+    try {
+      const r = await fetch('/api/session');
+      const s = await r.json();
+      if (s.autenticado) { $('quien').textContent = s.usuario; aplicarFiltrosDeUrl(); mostrar('tabla'); cargar(); }
+      else mostrar('login');
+    } catch { mostrar('login'); }
+  }
+
+  // ── Login ──
+  async function entrar() {
+    $('login-msg').textContent = '';
+    const btn = $('entrar'); btn.disabled = true; btn.textContent = 'Entrando…';
+    try {
+      const r = await fetch('/api/login', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ usuario: $('u').value, password: $('p').value }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'No se pudo entrar');
+      $('quien').textContent = d.usuario; $('p').value = '';
+      aplicarFiltrosDeUrl(); mostrar('tabla'); pagina = 1; cargar();
+    } catch (e) {
+      $('login-msg').textContent = e.message;
+    } finally {
+      btn.disabled = false; btn.textContent = 'Entrar';
+    }
+  }
+  $('entrar').onclick = entrar;
+  $('p').addEventListener('keydown', (e) => { if (e.key === 'Enter') entrar(); });
+
+  $('salir').onclick = async (e) => {
+    e.preventDefault();
+    await fetch('/api/logout', { method: 'POST' });
+    mostrar('login'); $('u').value = ''; $('p').value = '';
+  };
+
+  // ── Filtros de fecha ──
+  const iso = (d) => d.toISOString().slice(0, 10);
+  function fijarRango(desde, hasta) {
+    $('f-desde').value = desde;
+    $('f-hasta').value = hasta;
+    pagina = 1;
+    cargar();
+  }
+  $('q-hoy').onclick = () => { const h = new Date(); fijarRango(iso(h), iso(h)); };
+  $('q-ayer').onclick = () => { const a = new Date(Date.now() - 864e5); fijarRango(iso(a), iso(a)); };
+  $('q-7d').onclick = () => { const h = new Date(); fijarRango(iso(new Date(Date.now() - 6 * 864e5)), iso(h)); };
+  $('q-limpiar').onclick = () => fijarRango('', '');
+
+  // ── Tabla ──
+  function params(extra) {
+    const p = new URLSearchParams();
+    for (const [id, key] of FILTROS) if ($(id).value.trim()) p.set(key, $(id).value.trim());
+    for (const [k, v] of Object.entries(extra || {})) p.set(k, v);
+    return p;
+  }
+
+  // Prefija los filtros desde la URL (?respuesta=...&hoja=...) al llegar desde /analisis.
+  function aplicarFiltrosDeUrl() {
+    const u = new URLSearchParams(location.search);
+    for (const [id, key] of FILTROS) if (u.has(key)) $(id).value = u.get(key);
+  }
+
+  async function cargar() {
+    $('descarga').href = '/api/respuestas.xlsx?' + params();
+    let d;
+    try {
+      const r = await fetch('/api/respuestas?' + params({ pagina }));
+      if (r.status === 401) { mostrar('login'); return; }
+      d = await r.json();
+      if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status));
+    } catch (e) {
+      $('cont').innerHTML = '<div class="err">No se pudo cargar: ' + e.message + '</div>';
+      $('pag').textContent = ''; return;
+    }
+
+    if (!$('f-campana').value && d.campana) $('f-campana').value = String(d.campana.id);
+    $('descarga').href = '/api/respuestas.xlsx?' + params();
+    $('conteo').textContent = d.total.toLocaleString('es-CO') + ' contacto(s)';
+    if (d.filas.length === 0) {
+      $('cont').innerHTML = '<div class="err">Sin resultados para este filtro.</div>';
+      $('pag').textContent = ''; return;
+    }
+
+    const resp = (f) => {
+      if (f.respuesta) return `<span class="pill">${RESP[f.respuesta] || esc(f.respuesta)}</span>`;
+      if (f.clic_en) return '<span class="pill">Quiere participar</span>';
+      return f.estado_envio ? '<span class="no">Sin respuesta</span>' : '<span class="no">No enviado</span>';
+    };
+    const envio = (f) => f.estado_envio === 'fallido'
+      ? `<span title="${esc((f.error_code || '') + ' ' + (f.error_texto || ''))}">Fallido</span>`
+      : (ENVIO[f.estado_envio] || '<span class="no">—</span>');
+
+    const filas = d.filas.map((f) => `
+      <tr>
+        <td>${esc(f.nombre) || '<span class="no">—</span>'}</td>
+        <td>${esc(f.celular)}</td>
+        <td class="proc">${esc(f.empresa) || '<span class="no">—</span>'}</td>
+        <td>${resp(f)}</td>
+        <td>${f.clic_en ? '<span class="si">' + fecha(f.clic_en) + '</span>' : ''}</td>
+        <td>${envio(f)}</td>
+        <td>${fecha(f.enviado_en)}</td>
+        <td>${fecha(f.leido_en)}</td>
+        <td>${fecha(f.respondido_en)}</td>
+        <td>${et(f.estado)}</td>
+        <td class="no">${esc(f.hoja_origen)}</td>
+      </tr>`).join('');
+
+    $('cont').innerHTML = `<div class="tabla-cont"><table>
+      <thead><tr>
+        <th>Nombre</th><th>Celular</th><th>Empresa</th><th>Respuesta</th><th>Clic participar</th>
+        <th>Envío</th><th>Enviado</th><th>Leído</th><th>Respondió</th><th>Contacto</th><th>Base</th>
+      </tr></thead><tbody>${filas}</tbody></table></div>`;
+
+    const paginas = Math.max(1, Math.ceil(d.total / d.porPagina));
+    $('pag').innerHTML =
+      `<button ${pagina<=1?'disabled':''} id="prev">‹ Anterior</button>
+       <span>Página ${pagina} de ${paginas}</span>
+       <button ${pagina>=paginas?'disabled':''} id="next">Siguiente ›</button>`;
+    if ($('prev')) $('prev').onclick = () => { pagina--; cargar(); };
+    if ($('next')) $('next').onclick = () => { pagina++; cargar(); };
+  }
+
+  $('aplicar').onclick = () => { pagina = 1; cargar(); };
+  $('f-q').addEventListener('keydown', (e) => { if (e.key === 'Enter') { pagina = 1; cargar(); } });
+
+  init();
+</script>
+</body>
+</html>

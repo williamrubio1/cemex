@@ -1,0 +1,30 @@
+# Dependencias
+node_modules/
+
+# Configuración con secretos — NUNCA subir
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+npm-debug.log*
+
+# Datos de pacientes (nunca versionar)
+*.xlsx
+*.xls
+*.csv
+data/
+importaciones/
+
+# Sistema operativo / editor
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+
+# imágenes sueltas en la raíz
+*.webp
+*.png
+!public/*.png
