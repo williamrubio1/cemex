@@ -62,6 +62,7 @@
   a.verpersonas:hover { text-decoration:underline; }
   .verfila { margin-top:10px; display:flex; flex-wrap:wrap; gap:6px 14px; }
 
+  h2.bloque { font-size:15px; font-weight:600; margin:30px 0 12px; letter-spacing:-.01em; }
   .kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:12px; margin-bottom:20px; }
   .kpi { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:14px 15px; box-shadow:var(--shadow); }
   .kpi .n { font-size:21px; font-weight:620; letter-spacing:-.01em; font-variant-numeric:tabular-nums; }
@@ -181,6 +182,7 @@
         <option>BASE MEDELLIN</option>
         <option>MED-REGIMEN</option>
         <option>NORMAS PYMES</option>
+        <option value="ENTRANTE">ENTRANTE (escribieron sin estar en la base)</option>
       </select>
       <select id="f-ciudad">
         <option value="">Ciudad: todas</option>
@@ -192,6 +194,16 @@
         <option>Santanderes</option>
         <option>Otras regiones</option>
         <option>Sin ciudad</option>
+      </select>
+      <select id="f-clasificacion">
+        <option value="">Cuestionario: todos</option>
+        <option value="caliente">🔥 Calientes</option>
+        <option value="interesado">🟡 Interesados</option>
+        <option value="potencial">🔵 Potenciales</option>
+        <option value="completos">Registro completo</option>
+        <option value="incompletos">Registro sin terminar</option>
+        <option value="corporativo">Corporativos</option>
+        <option value="registrados">Conversaron con el bot</option>
       </select>
       <input id="f-seminario" type="search" placeholder="Seminario previo contiene…" />
       <button id="aplicar" class="primario" type="button">Aplicar</button>
@@ -235,7 +247,9 @@
     ['f-desde', 'desde', 'Desde'], ['f-hasta', 'hasta', 'Hasta'],
     ['f-respuesta', 'respuesta', 'Respuesta'], ['f-entrega', 'entrega', 'Entrega'],
     ['f-hoja', 'hoja', 'Base'], ['f-ciudad', 'ciudad', 'Ciudad'], ['f-seminario', 'seminario', 'Seminario'],
+    ['f-clasificacion', 'clasificacion', 'Cuestionario'],
   ];
+  const ETQ_INTERES = { cierre: 'Cierre Contable y Fiscal', sagrilaft: 'SAGRILAFT y PTEE', ambas: 'Ambas', info: 'Más información' };
 
   function params(extra) {
     const p = new URLSearchParams();
@@ -257,6 +271,8 @@
     const li = [];
     li.push(`Se enviaron <b>${fmt(k.enviados)}</b> mensajes; <b>${fmt(k.entregados)}</b> (${pct(k.entregados, k.enviados)}%) llegaron al WhatsApp del contacto y <b>${fmt(k.leidos)}</b> se leyeron.`);
     li.push(`<b>${fmt(k.interesados)}</b> personas mostraron interés (${pct(k.interesados, k.entregados)}% de los entregados): ${fmt(k.participar)} quieren participar y ${fmt(k.mas_info)} pidieron más información. ${verLink({ respuesta: 'interesados' }, 'ver la lista para el asesor →')}`);
+    const cu = d.cuestionario || {};
+    if (cu.conversaron) li.push(`<b>${fmt(cu.completos)}</b> personas completaron el registro en el chat: <b>${fmt(cu.caliente)}</b> listas para inscribirse (calientes) y ${fmt(cu.interesado)} en decisión. ${verLink({ clasificacion: 'caliente' }, 'ver calientes →')}`);
     if (k.opt_out) li.push(`<b>${fmt(k.opt_out)}</b> (${pct(k.opt_out, k.entregados)}%) pidieron no recibir más mensajes; quedan excluidos de próximos envíos.`);
     if (k.sin_whatsapp) li.push(`<b>${fmt(k.sin_whatsapp)}</b> números no tienen WhatsApp activo: conviene depurarlos de la base. ${verLink({ entrega: 'sin_whatsapp' }, 'ver →')}`);
     const mejor = [...d.porHoja].filter((h) => h.entregados >= 20).sort((a, b) => b.interesados / b.entregados - a.interesados / a.entregados)[0];
@@ -282,6 +298,7 @@
     $('nombre-campana').textContent = d.campana.nombre;
 
     const k = d.kpis;
+    const cu = d.cuestionario || {};
     const kpi = (n, l, den) => `<div class="kpi"><div class="n">${fmt(n)}${den ? `<span class="p"> · ${pct(n, den)}%</span>` : ''}</div><div class="l">${l}</div></div>`;
 
     $('cont').innerHTML = `
@@ -303,6 +320,37 @@
           <h2>¿Qué respondieron? <span>· clic para filtrar</span></h2>
           <div id="g-respuestas" class="chart alto"></div>
           <div class="verfila">${verLink({ respuesta: 'participar' }, 'Quieren participar →')} ${verLink({ respuesta: 'mas_info' }, 'Más información →')} ${verLink({ respuesta: 'texto' }, 'Escribieron →')}</div>
+        </section>
+      </div>
+
+      <h2 class="bloque">Cuestionario del chat</h2>
+      <div class="kpis">
+        ${kpi(cu.conversaron, 'Conversaron con el bot')}
+        ${kpi(cu.completos, 'Registro completo', cu.conversaron)}
+        ${kpi(cu.caliente, '🔥 Calientes', cu.conversaron)}
+        ${kpi(cu.interesado, '🟡 Interesados', cu.conversaron)}
+        ${kpi(cu.potencial, '🔵 Potenciales', cu.conversaron)}
+        ${kpi(cu.corporativo, 'Corporativos', cu.conversaron)}
+      </div>
+      <div class="grid2">
+        <section>
+          <h2>Avance del cuestionario <span>· clic para filtrar</span></h2>
+          <div id="g-cuestionario" class="chart alto"></div>
+        </section>
+        <section>
+          <h2>Clasificación <span>· clic para filtrar</span></h2>
+          <div id="g-clasif" class="chart alto"></div>
+          <div class="verfila">${verLink({ clasificacion: 'caliente' }, 'Calientes →')} ${verLink({ clasificacion: 'completos' }, 'Registros completos →')} ${verLink({ clasificacion: 'corporativo' }, 'Corporativos →')}</div>
+        </section>
+      </div>
+      <div class="grid2">
+        <section>
+          <h2>Capacitación que les interesa</h2>
+          <div id="g-interes" class="chart"></div>
+        </section>
+        <section>
+          <h2>Cargos más frecuentes</h2>
+          <div id="g-cargos" class="chart"></div>
         </section>
       </div>
 
@@ -351,6 +399,23 @@
       { nombre: 'Sin respuesta', valor: Math.max(0, k.entregados - k.respondieron), color: css('--none'), clave: 'sin_respuesta' },
     ].filter((s) => s.valor > 0), 'entregados', (p) => filtrar('f-respuesta', p.data.clave));
 
+    G.embudo('g-cuestionario', [
+      { nombre: 'Conversaron', valor: cu.conversaron || 0, clave: ['f-clasificacion', 'registrados'] },
+      { nombre: 'Empezaron el cuestionario', valor: cu.iniciaron || 0, clave: null },
+      { nombre: 'Eligieron capacitación (A)', valor: cu.resp_a || 0, clave: null },
+      { nombre: 'Dijeron cuándo inscribirse (D)', valor: cu.resp_d || 0, clave: null },
+      { nombre: 'Registro completo', valor: cu.completos || 0, clave: ['f-clasificacion', 'completos'] },
+    ], (p) => p.data.clave && filtrar(...p.data.clave));
+
+    G.dona('g-clasif', [
+      { nombre: 'Calientes', valor: cu.caliente || 0, color: css('--bad'), clave: 'caliente' },
+      { nombre: 'Interesados', valor: cu.interesado || 0, color: css('--pend'), clave: 'interesado' },
+      { nombre: 'Potenciales', valor: cu.potencial || 0, color: css('--c2'), clave: 'potencial' },
+    ].filter((s) => s.valor > 0), 'conversaron', (p) => filtrar('f-clasificacion', p.data.clave));
+
+    G.barras('g-interes', (cu.interes || []).map((x) => ({ nombre: ETQ_INTERES[x.k] || x.k, valor: x.n })), 'Personas', null, css('--ok'));
+    G.barras('g-cargos', (cu.cargos || []).map((x) => ({ nombre: x.k, valor: x.n })), 'Personas', null, css('--c2'));
+
     const h = d.porHoja.filter((x) => x.enviados > 0);
     G.barrasApiladas('g-hojas', h.map((x) => x.hoja), [
       { nombre: 'Interesados', datos: h.map((x) => x.interesados), color: css('--ok') },
@@ -381,6 +446,8 @@
     interesados: 'Interesados', participar: 'Quieren participar', mas_info: 'Más información', texto: 'Escribieron',
     opt_out: 'No desean', sin_respuesta: 'Sin respuesta', enviado: 'Enviados', entregado: 'Entregados', leido: 'Leídos',
     fallido: 'Fallidos', sin_whatsapp: 'Sin WhatsApp', no_enviado: 'No enviados',
+    caliente: 'Calientes', interesado: 'Interesados', potencial: 'Potenciales', completos: 'Registro completo',
+    incompletos: 'Sin terminar', corporativo: 'Corporativos', registrados: 'Conversaron',
   };
   function pintarChips() {
     const items = FILTROS.filter(([id, , lbl]) => lbl && id !== 'f-campana' && $(id).value).map(([id, , lbl]) =>

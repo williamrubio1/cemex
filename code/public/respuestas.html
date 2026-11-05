@@ -54,7 +54,7 @@
   .conteo { color:var(--muted); font-size:13px; margin-left:auto; }
   .tabla-cont { background:var(--surface); border:1px solid var(--border); border-radius:12px;
     box-shadow:var(--shadow); overflow-x:auto; }
-  table { width:100%; border-collapse:collapse; font-size:13px; min-width:920px; }
+  table { width:100%; border-collapse:collapse; font-size:13px; min-width:1240px; }
   th, td { text-align:left; padding:9px 12px; border-bottom:1px solid var(--border); vertical-align:top; }
   th { color:var(--muted); font-weight:600; font-size:11px; text-transform:uppercase;
     letter-spacing:.04em; position:sticky; top:0; background:var(--surface); }
@@ -107,6 +107,16 @@
 
     <div class="barra">
       <select id="f-campana"></select>
+      <select id="f-clasificacion">
+        <option value="">Cuestionario: todos</option>
+        <option value="caliente">🔥 Calientes</option>
+        <option value="interesado">🟡 Interesados</option>
+        <option value="potencial">🔵 Potenciales</option>
+        <option value="completos">Registro completo</option>
+        <option value="incompletos">Registro sin terminar</option>
+        <option value="corporativo">Corporativos</option>
+        <option value="registrados">Conversaron con el bot</option>
+      </select>
       <select id="f-respuesta">
         <option value="">Respuesta: todas</option>
         <option value="interesados">Interesados (para el asesor)</option>
@@ -141,6 +151,7 @@
         <option>BASE MEDELLIN</option>
         <option>MED-REGIMEN</option>
         <option>NORMAS PYMES</option>
+        <option value="ENTRANTE">ENTRANTE (escribieron sin estar en la base)</option>
         <option value="PRUEBA">PRUEBA (números de prueba)</option>
       </select>
       <select id="f-ciudad">
@@ -188,9 +199,17 @@
     participar:'Quiere participar', mas_info:'Más información', opt_out:'No desea mensajes', texto:'Escribió',
   };
   const ENVIO = { enviado:'Enviado', entregado:'Entregado', leido:'Leído', fallido:'Fallido' };
+  const CLASIF = { caliente:'🔥 Caliente', interesado:'🟡 Interesado', potencial:'🔵 Potencial' };
+  const INTERES = { cierre:'Cierre Contable y Fiscal', sagrilaft:'SAGRILAFT y PTEE', ambas:'Ambas', info:'Más información' };
+  const MODALIDAD = { individual:'Individual', empresa:'Para una empresa', varias:'Varias personas' };
+  const SITUACION = { si:'Trabaja en empresa', no:'No trabaja', independiente:'Independiente' };
+  const MOMENTO = { ahora:'Inscribirse ahora', info:'Necesita más info', empresa:'Opciones para empresa' };
+  const PASO = { inicio:'Sin empezar', interes:'Pregunta A', modalidad:'Pregunta B', situacion:'Pregunta C',
+    momento:'Pregunta D', nombre:'Dato: nombre', correo:'Dato: correo', ciudad:'Dato: ciudad',
+    empresa:'Dato: empresa', cargo:'Dato: cargo', fin:'Completo' };
   // Filtros: [id del control, parámetro de la URL]
   const FILTROS = [
-    ['f-campana','campana'], ['f-respuesta','respuesta'], ['f-entrega','entrega'], ['f-estado','estado'],
+    ['f-campana','campana'], ['f-clasificacion','clasificacion'], ['f-respuesta','respuesta'], ['f-entrega','entrega'], ['f-estado','estado'],
     ['f-hoja','hoja'], ['f-ciudad','ciudad'], ['f-seminario','seminario'], ['f-q','q'],
     ['f-campofecha','campoFecha'], ['f-desde','desde'], ['f-hasta','hasta'],
   ];
@@ -303,12 +322,34 @@
       ? `<span title="${esc((f.error_code || '') + ' ' + (f.error_texto || ''))}">Fallido</span>`
       : (ENVIO[f.estado_envio] || '<span class="no">—</span>');
 
+    const nada = '<span class="no">—</span>';
+    // Dato del registro (lo que escribió en el chat) o, si no hay, el de la base en gris.
+    const dato = (reg, base) => reg ? esc(reg) : (base ? `<span class="no">${esc(base)}</span>` : nada);
+    const registro = (f) => {
+      if (!f.r_paso) return nada;
+      const partes = [
+        `<span class="pill">${CLASIF[f.r_clasificacion] || esc(f.r_clasificacion)}</span>`,
+        f.r_corporativo ? '<span class="pill">Corporativo</span>' : '',
+        `<div class="no" style="margin-top:3px">${esc(PASO[f.r_paso] || f.r_paso)}</div>`,
+      ];
+      return partes.join(' ');
+    };
+    const cuestionario = (f) => [
+      f.r_interes && esc(INTERES[f.r_interes] || f.r_interes),
+      f.r_modalidad && esc(MODALIDAD[f.r_modalidad] || f.r_modalidad),
+      f.r_situacion && esc(SITUACION[f.r_situacion] || f.r_situacion),
+      f.r_momento && `<b>${esc(MOMENTO[f.r_momento] || f.r_momento)}</b>`,
+    ].filter(Boolean).join('<br>') || nada;
+
     const filas = d.filas.map((f) => `
       <tr>
-        <td>${esc(f.nombre) || '<span class="no">—</span>'}</td>
+        <td>${registro(f)}</td>
+        <td>${dato(f.r_nombre, f.nombre)}${f.r_cargo ? `<div class="no">${esc(f.r_cargo)}</div>` : ''}</td>
         <td>${esc(f.celular)}</td>
-        <td class="proc">${esc(f.empresa) || '<span class="no">—</span>'}</td>
-        <td>${esc(f.ciudad) || '<span class="no">—</span>'}</td>
+        <td class="proc">${dato(f.r_correo, f.correo)}</td>
+        <td class="proc">${dato(f.r_empresa, f.empresa)}</td>
+        <td>${dato(f.r_ciudad, f.ciudad)}</td>
+        <td class="proc">${cuestionario(f)}</td>
         <td>${resp(f)}</td>
         <td>${f.clic_en ? '<span class="si">' + fecha(f.clic_en) + '</span>' : ''}</td>
         <td>${envio(f)}</td>
@@ -321,7 +362,8 @@
 
     $('cont').innerHTML = `<div class="tabla-cont"><table>
       <thead><tr>
-        <th>Nombre</th><th>Celular</th><th>Empresa</th><th>Ciudad</th><th>Respuesta</th><th>Clic participar</th>
+        <th>Registro</th><th>Nombre / cargo</th><th>Celular</th><th>Correo</th><th>Empresa</th><th>Ciudad</th>
+        <th>Cuestionario</th><th>Respuesta</th><th>Clic asesor</th>
         <th>Envío</th><th>Enviado</th><th>Leído</th><th>Respondió</th><th>Contacto</th><th>Base</th>
       </tr></thead><tbody>${filas}</tbody></table></div>`;
 

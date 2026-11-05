@@ -13,9 +13,28 @@ const { filtro, campanaDe } = require('./filtros');
 const CAMPOS = `k.id, k.celular, k.nombre, k.empresa, k.ciudad, k.correo, k.hoja_origen, k.seminarios_previos,
   k.estado, k.opt_out, k.ultima_interaccion,
   e.estado_envio, e.intentos, e.enviado_en, e.entregado_en, e.leido_en, e.error_code, e.error_texto,
-  e.respuesta, e.respondido_en, e.clic_en`;
+  e.respuesta, e.respondido_en, e.clic_en,
+  r.paso AS r_paso, r.interes AS r_interes, r.modalidad AS r_modalidad, r.situacion AS r_situacion,
+  r.momento AS r_momento, r.nombre AS r_nombre, r.correo AS r_correo, r.ciudad AS r_ciudad,
+  r.empresa AS r_empresa, r.cargo AS r_cargo, r.clasificacion AS r_clasificacion,
+  r.corporativo AS r_corporativo, r.completado_en AS r_completado_en, r.actualizado_en AS r_actualizado_en`;
 
-const ORDEN = 'ORDER BY COALESCE(e.respondido_en, e.clic_en, e.enviado_en) DESC, k.id';
+const ORDEN = 'ORDER BY COALESCE(r.actualizado_en, e.respondido_en, e.clic_en, e.enviado_en) DESC, k.id';
+
+// Textos de las respuestas del cuestionario (también los usa la vista /respuestas).
+const ETIQ_REGISTRO = {
+  interes: { cierre: 'Cierre Contable y Fiscal', sagrilaft: 'SAGRILAFT y PTEE', ambas: 'Ambas', info: 'Más información' },
+  modalidad: { individual: 'Individual', empresa: 'Para una empresa', varias: 'Varias personas' },
+  situacion: { si: 'Sí', no: 'No', independiente: 'Independiente' },
+  momento: { ahora: 'Inscribirse ahora', info: 'Necesita más información', empresa: 'Opciones para empresa' },
+  clasificacion: { caliente: 'Caliente', interesado: 'Interesado', potencial: 'Potencial' },
+  paso: {
+    inicio: 'Sin empezar', interes: 'A · capacitación', modalidad: 'B · modalidad', situacion: 'C · trabaja',
+    momento: 'D · cuándo', nombre: 'Dato: nombre', correo: 'Dato: correo', ciudad: 'Dato: ciudad',
+    empresa: 'Dato: empresa', cargo: 'Dato: cargo', fin: 'Completo',
+  },
+};
+const et = (grupo, v) => (v == null ? '' : ETIQ_REGISTRO[grupo][v] || v);
 
 const ESTADO_ETIQ = {
   no_contactado: 'Sin contactar',
@@ -71,11 +90,24 @@ async function aExcel(filas) {
   wb.created = new Date();
   const ws = wb.addWorksheet('Respuestas', { views: [{ state: 'frozen', ySplit: 1 }] });
   ws.columns = [
-    { header: 'Nombre', key: 'nombre', width: 30 },
+    { header: 'Clasificación', key: 'clasificacion', width: 14 },
+    { header: 'Corporativo', key: 'corporativo', width: 12 },
+    { header: 'Registro', key: 'paso', width: 18 },
+    { header: 'Capacitación', key: 'interes', width: 24 },
+    { header: 'Modalidad', key: 'modalidad', width: 18 },
+    { header: 'Trabaja en empresa', key: 'situacion', width: 16 },
+    { header: 'Cuándo inscribirse', key: 'momento', width: 24 },
+    { header: 'Nombre (registro)', key: 'r_nombre', width: 30 },
+    { header: 'Correo (registro)', key: 'r_correo', width: 30 },
+    { header: 'Ciudad (registro)', key: 'r_ciudad', width: 18 },
+    { header: 'Empresa (registro)', key: 'r_empresa', width: 30 },
+    { header: 'Cargo', key: 'r_cargo', width: 24 },
+    { header: 'Registro completado', key: 'r_completado_en', width: 20 },
+    { header: 'Nombre (base)', key: 'nombre', width: 30 },
     { header: 'Celular', key: 'celular', width: 16 },
-    { header: 'Empresa', key: 'empresa', width: 32 },
-    { header: 'Ciudad', key: 'ciudad', width: 20 },
-    { header: 'Correo', key: 'correo', width: 30 },
+    { header: 'Empresa (base)', key: 'empresa', width: 32 },
+    { header: 'Ciudad (base)', key: 'ciudad', width: 20 },
+    { header: 'Correo (base)', key: 'correo', width: 30 },
     { header: 'Respuesta', key: 'respuesta', width: 22 },
     { header: 'Clic en "Quiero participar"', key: 'clic_en', width: 22 },
     { header: 'Fecha de respuesta', key: 'respondido_en', width: 20 },
@@ -88,10 +120,23 @@ async function aExcel(filas) {
     { header: 'Seminarios previos', key: 'seminarios_previos', width: 60 },
   ];
   ws.getRow(1).font = { bold: true };
-  ws.autoFilter = { from: 'A1', to: 'O1' };
+  ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: ws.columns.length } };
 
   for (const f of filas) {
     ws.addRow({
+      clasificacion: et('clasificacion', f.r_clasificacion),
+      corporativo: f.r_corporativo ? 'Sí' : '',
+      paso: et('paso', f.r_paso),
+      interes: et('interes', f.r_interes),
+      modalidad: et('modalidad', f.r_modalidad),
+      situacion: et('situacion', f.r_situacion),
+      momento: et('momento', f.r_momento),
+      r_nombre: f.r_nombre || '',
+      r_correo: f.r_correo || '',
+      r_ciudad: f.r_ciudad || '',
+      r_empresa: f.r_empresa || '',
+      r_cargo: f.r_cargo || '',
+      r_completado_en: fecha(f.r_completado_en),
       nombre: f.nombre || '',
       celular: f.celular,
       empresa: f.empresa || '',
@@ -110,10 +155,10 @@ async function aExcel(filas) {
     });
   }
   const fmt = 'yyyy-mm-dd hh:mm';
-  for (const k of ['clic_en', 'respondido_en', 'enviado_en', 'leido_en']) ws.getColumn(k).numFmt = fmt;
+  for (const k of ['r_completado_en', 'clic_en', 'respondido_en', 'enviado_en', 'leido_en']) ws.getColumn(k).numFmt = fmt;
   ws.getColumn('celular').numFmt = '@';
 
   return wb.xlsx.writeBuffer();
 }
 
-module.exports = { listar, todas, aExcel };
+module.exports = { listar, todas, aExcel, ETIQ_REGISTRO };

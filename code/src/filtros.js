@@ -12,17 +12,43 @@
  *   ciudad      ciudad / región deducida ("Sin ciudad" = sin dato)
  *   empresa     empresa exacta
  *   seminario   texto contenido en los seminarios previos
+ *   clasificacion caliente | interesado | potencial | registrados | completos | incompletos | corporativo
  *   q           busca en nombre, celular, empresa y correo
  *   desde/hasta YYYY-MM-DD sobre campoFecha: envio (def.) | respuesta
  */
 
 const esFecha = (s) => /^\d{4}-\d{2}-\d{2}$/.test(String(s || ''));
 
-const JOIN = 'FROM contactos k LEFT JOIN envios e ON e.contacto_id = k.id AND e.campana_id = ?';
+const JOIN =
+  'FROM contactos k LEFT JOIN envios e ON e.contacto_id = k.id AND e.campana_id = ? ' +
+  'LEFT JOIN registros r ON r.contacto_id = k.id AND r.campana_id = ?';
 
 function filtro(f = {}, campanaId) {
   const where = [];
-  const params = [campanaId]; // para el JOIN
+  const params = [campanaId, campanaId]; // para los dos JOIN
+
+  // Cuestionario del chat: clasificación del registro o registros completos.
+  switch (f.clasificacion) {
+    case 'caliente':
+    case 'interesado':
+    case 'potencial':
+      where.push('r.clasificacion = ?');
+      params.push(f.clasificacion);
+      break;
+    case 'registrados':
+      where.push('r.id IS NOT NULL');
+      break;
+    case 'completos':
+      where.push('r.completado_en IS NOT NULL');
+      break;
+    case 'incompletos':
+      where.push("r.id IS NOT NULL AND r.completado_en IS NULL AND r.paso <> 'inicio'");
+      break;
+    case 'corporativo':
+      where.push('r.corporativo = 1');
+      break;
+    default:
+  }
 
   if (f.estado) {
     const lista = String(f.estado).split(',').map((s) => s.trim()).filter(Boolean);
@@ -95,8 +121,10 @@ function filtro(f = {}, campanaId) {
     params.push(`%${f.seminario}%`);
   }
   if (f.q) {
-    where.push('(k.nombre LIKE ? OR k.celular LIKE ? OR k.empresa LIKE ? OR k.correo LIKE ?)');
-    params.push(...Array(4).fill(`%${String(f.q).trim()}%`));
+    where.push(
+      '(k.nombre LIKE ? OR k.celular LIKE ? OR k.empresa LIKE ? OR k.correo LIKE ? OR r.nombre LIKE ? OR r.correo LIKE ? OR r.empresa LIKE ?)'
+    );
+    params.push(...Array(7).fill(`%${String(f.q).trim()}%`));
   }
 
   const col = f.campoFecha === 'respuesta' ? 'COALESCE(e.respondido_en, e.clic_en)' : 'e.enviado_en';

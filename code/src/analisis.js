@@ -38,6 +38,39 @@ async function resumen(f = {}) {
     params
   );
 
+  // Cuestionario del chat: embudo, clasificación y respuestas.
+  const [cu] = await q(
+    `SELECT
+       SUM(r.id IS NOT NULL)                       AS conversaron,
+       SUM(r.interes IS NOT NULL OR r.paso <> 'inicio') AS iniciaron,
+       SUM(r.interes IS NOT NULL)                  AS resp_a,
+       SUM(r.momento IS NOT NULL)                  AS resp_d,
+       SUM(r.completado_en IS NOT NULL)            AS completos,
+       SUM(r.clasificacion = 'caliente')           AS caliente,
+       SUM(r.clasificacion = 'interesado')         AS interesado,
+       SUM(r.clasificacion = 'potencial')          AS potencial,
+       SUM(r.corporativo = 1)                      AS corporativo
+     ${join} ${cond}`,
+    params
+  );
+  const reparto = async (col) =>
+    (
+      await q(
+        `SELECT r.${col} AS k, COUNT(*) AS n ${join} ${cond} ${cond ? 'AND' : 'WHERE'} r.${col} IS NOT NULL
+         GROUP BY r.${col} ORDER BY n DESC`,
+        params
+      )
+    ).map((x) => ({ k: x.k, n: Number(x.n) }));
+  const cuestionario = {
+    ...num(cu),
+    interes: await reparto('interes'),
+    modalidad: await reparto('modalidad'),
+    situacion: await reparto('situacion'),
+    momento: await reparto('momento'),
+    ciudades: (await reparto('ciudad')).slice(0, 12),
+    cargos: (await reparto('cargo')).slice(0, 12),
+  };
+
   // Por hoja de origen (primera hoja del contacto).
   const porHoja = await q(
     `SELECT SUBSTRING_INDEX(COALESCE(k.hoja_origen, 'Sin hoja'), '; ', 1) AS hoja,
@@ -103,6 +136,7 @@ async function resumen(f = {}) {
     generado: new Date().toISOString(),
     campana: { id: campana.id, nombre: campana.nombre, seminario: campana.seminario, fechas: campana.fechas },
     kpis: num(k),
+    cuestionario,
     porHoja: porHoja.map((r) => ({ hoja: r.hoja, ...num({ enviados: r.enviados, entregados: r.entregados, interesados: r.interesados, opt_out: r.opt_out }) })),
     seminarios,
     empresas,

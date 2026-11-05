@@ -17,7 +17,8 @@ WhatsApp Business y número) están en el portafolio de CETEX.
 ```
 src/
   index.js         # Express: webhook, /r/:token, paneles y APIs
-  conversacion.js  # qué responder a cada botón / texto (función pura)
+  conversacion.js  # bienvenida, cuestionario A–D, captura de datos y clasificación (función pura)
+  normalizar.js    # limpia y valida nombre, correo, ciudad, empresa y cargo
   whatsapp.js      # plantilla, texto, botones, botón con enlace (cta_url)
   db.js            # MySQL: contactos, campañas, envíos, log
   telefonos.js     # normalización/extracción de celulares
@@ -29,7 +30,8 @@ src/
   import.js        # importa el Excel de contactos (varias hojas)
   simular.js       # simula la conversación sin BD ni WhatsApp
 public/            # index.html (público), respuestas.html y analisis.html (con login)
-db/schema.sql      # tablas (aditivo e idempotente) + primera campaña
+db/schema.sql      # tablas (aditivo e idempotente) + campañas
+db/00X_*.sql       # migraciones para una base ya creada (correr una vez en phpMyAdmin)
 docs/plantilla_cetex_whatsapp.md
 ```
 
@@ -40,6 +42,8 @@ docs/plantilla_cetex_whatsapp.md
 | `contactos` | celular (único), nombre, primer nombre, empresa, correo, hoja de origen, seminarios previos, estado, opt-out |
 | `campanas` | una por seminario: plantilla, fechas, horario, enlace de inscripción |
 | `envios` | contacto × campaña: enviado / entregado / leído / fallido, respuesta, clic |
+| `registros` | contacto × campaña: respuestas del cuestionario, datos normalizados, clasificación |
+| `lotes`, `lote_contactos` | envíos masivos lanzados desde `/envios` |
 | `mensajes` | log de todo lo que entra y sale |
 | `eventos_procesados` | idempotencia del webhook |
 | `usuarios` | login de las vistas internas |
@@ -66,16 +70,39 @@ saca números que nunca se contactan (la línea de ventas 314 251 1033).
 
 ## Conversación
 
-Plantilla de marketing (ver `docs/plantilla_cetex_whatsapp.md`) con 3 botones:
+Plantilla `cetex_capacitaciones_2026` (ver `docs/plantilla_cetex_whatsapp.md`) con 3
+respuestas rápidas: *Quiero participar* · *Más información* · *No deseo recibir mensajes*.
 
-| Botón | Qué pasa |
-|---|---|
-| ✅ Quiero participar | abre el WhatsApp de ventas de CETEX. Con `PUBLIC_URL` y URL dinámica pasa por `/r/<token>` y se mide el clic |
-| Más información | el bot envía el detalle del seminario + botón *Quiero participar* |
-| No deseo recibir mensajes | opt-out: excluido de todas las campañas (escribiendo **ALTA** se reactiva) |
+```
+Quiero participar →
+A ¿Cuál capacitación te interesa?  (lista)    Cierre Contable · SAGRILAFT y PTEE · Ambas · Más información
+B ¿Cómo deseas participar?          (botones)  Individual · Para una empresa · Varias personas
+C ¿Trabajas en una empresa?         (botones)  Sí · No · Soy independiente
+D ¿Cuándo inscribirte?              (lista)    Inscribirme ahora · Necesito más info · Opciones para empresa
+Datos: nombre · correo · ciudad · empresa (si trabaja en una o se inscribe por empresa) · cargo
+→ mensaje final + botón "Hablar con asesor" (wa.me/573142511033, medido vía /r/<token>)
+```
 
-Texto libre → agradecimiento + botón; si pide la baja ("no me interesa", "salir"…) → opt-out.
-`npm run simular` muestra todos los casos.
+- Cada respuesta se guarda al momento en `registros` (`paso` = pregunta pendiente):
+  si la persona deja de responder, queda lo que alcanzó a contestar.
+- Si la base ya trae el dato (nombre, correo, empresa, ciudad conocida), solo se
+  pide confirmarlo con [Sí, es correcto] [No, cambiarlo].
+- Normalización (`normalizar.js`): nombre en tipo título sin símbolos (mín. nombre
+  y apellido); correo en minúsculas y validado, con sugerencia para dominios mal
+  escritos (gmial.com → gmail.com); ciudad contra catálogo de municipios
+  ("bogota dc" → Bogotá); cargo con abreviaturas y tildes ("aux contable" →
+  Auxiliar Contable).
+- Respuestas escritas también sirven ("las dos", "individual", "1"…); si no se
+  entiende, se repite la pregunta.
+- **Clasificación**: 🔥 caliente (D = inscribirme ahora) · 🟡 interesado (D = más
+  info u opciones para empresa) · 🔵 potencial (no llegó a D). **Corporativo** si
+  se inscribe por una empresa o para varias personas.
+- Baja en cualquier momento ("salir", "no deseo recibir mensajes"); **ALTA** reactiva.
+- Quien escribe sin estar en la base se crea como contacto `ENTRANTE` (con su
+  nombre de perfil de WhatsApp) y recibe la bienvenida con los 3 botones.
+- El texto de *Más información* es `campanas.detalle`; si está vacío se usa uno genérico.
+
+`npm run simular` recorre los casos y verifica el resultado.
 
 ## Envío masivo
 
@@ -93,11 +120,14 @@ según la calidad. Si Meta limita (códigos 131048/131049) la tanda se detiene s
 - `GET /` — panel público (sin datos personales): embudo, respuestas, actividad
   diaria, mapa de calor día × hora, respuestas hora a hora con marcas de tandas,
   entrega y resultado por base. Cada gráfica se descarga como PNG.
-- `GET /respuestas` — tabla con filtros (campaña, respuesta, entrega, estado,
-  base, seminario previo, búsqueda, fechas) y descarga en Excel.
+- `GET /respuestas` — tabla con filtros (campaña, clasificación del cuestionario,
+  respuesta, entrega, estado, base, seminario previo, búsqueda, fechas) y descarga
+  en Excel con las respuestas A–D y los datos del registro.
 - `GET /analisis` — informe con lectura rápida, filtros cruzados (clic en las
-  gráficas), público que mejor responde por seminario previo, empresas
-  interesadas y errores de entrega. Botón Imprimir / PDF.
+  gráficas), avance del cuestionario, clasificación, capacitación de interés,
+  cargos, público que mejor responde por seminario previo, empresas interesadas
+  y errores de entrega. Botón Imprimir / PDF.
+- `GET /envios` — pruebas y envío por lotes.
 
 ## Webhook en Meta
 

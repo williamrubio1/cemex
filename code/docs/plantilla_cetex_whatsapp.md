@@ -1,63 +1,61 @@
-# Plantilla de WhatsApp — Invitación a seminario CETEX
+# Plantillas de WhatsApp — CETEX
 
-Borrador para crear en **WhatsApp Manager → Plantillas de mensajes → Crear plantilla**.
+Se crean en **WhatsApp Manager → Plantillas de mensajes → Crear plantilla**.
+Cada campaña (tabla `campanas`) indica qué plantilla envía.
+
+## Vigente: `cetex_capacitaciones_2026` (campaña `capacitaciones-2026`)
 
 | Campo | Valor |
 |---|---|
-| Categoría | **Marketing** (promociona un seminario pago) |
-| Nombre | `cetex_seminario_cierre_2026` (minúsculas, sin espacios) |
+| Categoría | **Marketing** |
+| Nombre | `cetex_capacitaciones_2026` |
 | Idioma | Español (Colombia) — `es_CO` |
-| Variables | `{{1}}` = primer nombre del contacto |
+| Variable | `{{nombre}}` = primer nombre del contacto (ejemplo para Meta: `William`) |
 
-## Encabezado (texto, opcional)
+En el `.env` (o variables de Hostinger): `TEMPLATE_PARAM_NAME=nombre`.
 
-```
-Taller: Cierre contable y fiscal 2026
-```
-
-## Cuerpo
+### Cuerpo
 
 ```
-Hola {{1}}, le saluda CETEX.
+Hola, {{nombre}}. Bienvenido a CETEX.
+Nos alegra que quieras fortalecer tus conocimientos y actualizarte profesionalmente. Tenemos dos opciones de formación:
 
-Queremos invitarle a nuestro seminario:
+📚 *Seminario: Cierre Contable y Fiscal con IA y sin IA*
+📅 23, 25 y 26 de noviembre
+🕔 5:00 p. m. a 9:00 p. m.
 
-*TALLER CIERRE CONTABLE Y FISCAL CON IA Y SIN IA*
-*Bajo NIIF para Pymes 2026 – Decreto 701*
-
-📅 Noviembre 23, 25 y 26
-🕔 Horario: 5:00 p. m. a 9:00 p. m.
-
-Estamos interesados en su participación. Toque el botón para inscribirse o recibir más información.
+🛠️ *Taller práctico: SAGRILAFT y PTEE*
+📅 5 y 12 de diciembre
+🕖 7:00 a. m. a 1:00 p. m.
 ```
 
-Ejemplo de `{{1}}` para la revisión de Meta: `William`.
-
-## Pie
+### Pie
 
 ```
-CETEX · cetex.com.co
+www.cetex.com.co
 ```
 
-## Botones
+### Botones (los 3 de tipo *respuesta rápida*)
 
-| Tipo | Texto | Acción |
-|                 ---                |---|---|
-| Visitar sitio web (URL estática)   | `✅ Quiero participar` | `https://wa.me/573142511033?text=Quiero%20participar%20en%20el%20Taller%20de%20Cierre%20Contable%20y%20Fiscal%202026` |
-| Respuesta rápida | `Más información` | la recibe el webhook |
-| Respuesta rápida | `No deseo recibir mensajes` | la recibe el webhook → marca opt-out |
+| Texto | Qué hace el bot |
+|---|---|
+| `Quiero participar` | empieza el cuestionario (preguntas A–D y datos) |
+| `Más información` | envía el detalle de las capacitaciones + botón *Quiero participar* |
+| `No deseo recibir mensajes` | opt-out en todas las campañas |
 
-## Notas
+Los tres llegan al webhook (a diferencia de un botón de URL), así el bot puede
+seguir la conversación. El enlace al WhatsApp del asesor (314 251 1033) va en el
+mensaje final, medido vía `/r/<token>` cuando hay `PUBLIC_URL`.
 
-- Se usa el enlace **directo** `wa.me/573142511033` en vez de `https://wa.link/6vwrnd`:
-  ese acortador redirige al mismo número de CETEX, pero Meta suele rechazar
-  plantillas con acortadores porque ocultan el destino.
-- El botón de URL **no** avisa al webhook cuando se toca. Para medir los clics,
-  cuando el dominio esté desplegado, crear la plantilla con URL **dinámica**
-  `https://<dominio>/r/{{1}}` (ejemplo para Meta: `https://<dominio>/r/abc123`)
-  y poner en el `.env` `PUBLIC_URL=https://<dominio>` y
-  `TEMPLATE_URL_BOTON_INDEX=` el índice de ese botón (0 si es el primero).
-  La plataforma registra el clic y redirige al `url_inscripcion` de la campaña.
-- El botón **No deseo recibir mensajes** es obligatorio en la práctica para
-  marketing: reduce bloqueos/reportes, que bajan la calidad del número.
-- Meta no permite que el cuerpo empiece ni termine con una variable.
+### Notas de Meta
+
+- Esta cuenta solo acepta variables **con nombre** (`{{nombre}}`), no `{{1}}`.
+- Una plantilla aprobada no permite cambiar el tipo de botón: para cambiarlo se
+  crea una plantilla nueva. No borrar la anterior (el nombre queda bloqueado 30 días).
+- La variable no puede ir al inicio ni al final del cuerpo.
+
+## Anterior: `cetex_seminario_cierre_2026` (campaña `cierre-2026`)
+
+Un solo seminario, botón de URL "Quiero participar" hacia `wa.me/573142511033`
+y dos respuestas rápidas. Se aprobó sin variables (se escribió `{{1}}` y Meta
+lo rechazó como variable), por eso para ella va `TEMPLATE_PARAM_NAME=-`.

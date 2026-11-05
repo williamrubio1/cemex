@@ -269,6 +269,51 @@ async function registrarClic(envioId) {
   );
 }
 
+// ─── Registros del cuestionario ─────────────────────────────
+
+async function getRegistro(contactoId, campanaId) {
+  const rows = await query('SELECT * FROM registros WHERE contacto_id = ? AND campana_id = ? LIMIT 1', [
+    contactoId,
+    campanaId,
+  ]);
+  return rows[0] || null;
+}
+
+const COLS_REGISTRO = new Set([
+  'paso', 'interes', 'modalidad', 'situacion', 'momento', 'nombre', 'correo', 'ciudad', 'empresa', 'cargo',
+  'pendiente', 'clasificacion', 'corporativo', 'completado_en',
+]);
+
+/** Crea o actualiza el registro (contacto, campaña) con las columnas permitidas. */
+async function guardarRegistro(contactoId, campanaId, campos) {
+  const claves = Object.keys(campos).filter((k) => COLS_REGISTRO.has(k));
+  if (claves.length === 0) return;
+  const valores = claves.map((k) =>
+    k === 'pendiente' ? (campos[k] == null ? null : JSON.stringify(campos[k])) : campos[k] ?? null
+  );
+  await pool.execute(
+    `INSERT INTO registros (contacto_id, campana_id, ${claves.map((k) => `\`${k}\``).join(', ')})
+     VALUES (?, ?, ${claves.map(() => '?').join(', ')})
+     ON DUPLICATE KEY UPDATE ${claves.map((k) => `\`${k}\` = VALUES(\`${k}\`)`).join(', ')}`,
+    [contactoId, campanaId, ...valores]
+  );
+}
+
+/**
+ * Número que escribe sin estar en la base: se crea como contacto (hoja_origen = 'ENTRANTE')
+ * para poder guardar su registro. Devuelve el contacto.
+ */
+async function crearContactoEntrante(celular, nombrePerfil) {
+  const nombre = String(nombrePerfil || '').replace(/\s+/g, ' ').trim().slice(0, 160) || null;
+  const primer = nombre ? nombre.split(' ')[0].slice(0, 60) : null;
+  await pool.execute(
+    `INSERT IGNORE INTO contactos (celular, nombre, primer_nombre, hoja_origen, estado)
+     VALUES (?, ?, ?, 'ENTRANTE', 'contactado')`,
+    [celular, nombre, primer]
+  );
+  return getContactoPorCelular(celular);
+}
+
 // ─── Log e idempotencia ─────────────────────────────────────
 
 /** Registra un mensaje en el log de auditoría. */
@@ -319,4 +364,7 @@ module.exports = {
   registrarClic,
   registrarMensaje,
   eventoYaProcesado,
+  getRegistro,
+  guardarRegistro,
+  crearContactoEntrante,
 };

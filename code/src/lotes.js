@@ -65,7 +65,7 @@ const ORDEN_SQL = {
 /**
  * FROM + WHERE de los contactos que pueden entrar a un lote de la campaña:
  * no han recibido la campaña, no pidieron baja, tienen WhatsApp, no son de prueba,
- * no están excluidos y no están ya pendientes en otro lote abierto.
+ * no están excluidos, no están ya pendientes en otro lote abierto y no tienen registro en la campaña.
  */
 function candidatos(campanaId, f) {
   const where = [
@@ -76,8 +76,10 @@ function candidatos(campanaId, f) {
     `NOT EXISTS (SELECT 1 FROM lote_contactos lc JOIN lotes l ON l.id = lc.lote_id
        WHERE lc.contacto_id = k.id AND l.campana_id = ? AND l.estado IN ${ABIERTOS}
          AND lc.estado IN ('pendiente','enviando'))`,
+    // Ya conversó con el bot en esta campaña (p. ej. escribió por su cuenta): no se le envía la plantilla.
+    'NOT EXISTS (SELECT 1 FROM registros r WHERE r.contacto_id = k.id AND r.campana_id = ?)',
   ];
-  const params = [campanaId, campanaId]; // JOIN + NOT EXISTS
+  const params = [campanaId, campanaId, campanaId]; // JOIN + NOT EXISTS (lotes) + NOT EXISTS (registros)
 
   const excl = [...celularesExcluidos()];
   if (excl.length) {
@@ -586,6 +588,7 @@ async function prueba({ campana: campanaId, numeros, nombre }) {
           `UPDATE envios SET respuesta = NULL, respondido_en = NULL, clic_en = NULL WHERE campana_id = ? AND contacto_id = ?`,
           [campana.id, c.id]
         );
+        await q('DELETE FROM registros WHERE campana_id = ? AND contacto_id = ?', [campana.id, c.id]);
       }
       resultados.push({ numero: celular, ok: true, id: waId, saludo: c.primer_nombre || process.env.TEMPLATE_NOMBRE_DEFECTO || 'estimado(a)' });
     } catch (err) {

@@ -345,7 +345,10 @@ async function procesarWebhook(body) {
   for (const entry of body.entry || []) {
     for (const change of entry.changes || []) {
       const value = change.value || {};
-      for (const msg of value.messages || []) await procesarMensajeEntrante(msg);
+      for (const msg of value.messages || []) {
+        const perfil = (value.contacts || []).find((c) => c.wa_id === msg.from)?.profile?.name;
+        await procesarMensajeEntrante(msg, perfil);
+      }
       for (const st of value.statuses || []) await procesarEstado(st);
     }
   }
@@ -371,7 +374,7 @@ function interpretarEntrada(msg) {
   }
 }
 
-async function procesarMensajeEntrante(msg) {
+async function procesarMensajeEntrante(msg, nombrePerfil) {
   const waId = msg.id;
   const celular = celularDe(msg.from);
 
@@ -388,35 +391,54 @@ async function procesarMensajeEntrante(msg) {
     wa_message_id: waId,
   });
 
-  const contacto = await db.getContactoPorCelular(celular);
+  let contacto = await db.getContactoPorCelular(celular);
   const entrada = interpretarEntrada(msg);
   console.log(
     `[in] ${celular} ${contacto ? contacto.nombre || '(sin nombre)' : '(desconocido)'} · ${msg.type} · ${JSON.stringify(entrada)}`
   );
 
+  // Quien escribe sin estar en la base se crea como contacto ENTRANTE para guardar su registro.
+  if (!contacto && celular) {
+    try {
+      contacto = await db.crearContactoEntrante(celular, nombrePerfil);
+    } catch (err) {
+      console.error(`[in] ${celular} no se pudo crear el contacto:`, err.message);
+    }
+  }
+
   // ¿A qué envío responde? 1) el mensaje citado (context.id = plantilla), 2) el último envío.
   let envio = msg.context?.id ? await db.envioPorWaId(msg.context.id) : null;
   if (!envio && contacto) envio = await db.ultimoEnvioDeContacto(contacto.id);
   const campana = envio ? await db.getCampana(envio.campana_id) : await db.campanaActiva();
+  const registro = contacto && campana ? await db.getRegistro(contacto.id, campana.id) : null;
 
   const url = PUBLIC_URL && envio ? `${PUBLIC_URL}/r/${envio.token}` : campana?.url_inscripcion;
-  const plan = decidir(contacto, campana, entrada, url);
+  const plan = decidir({ contacto, campana, registro, entrada, url });
+
+  // Primero se guarda el estado (si un envío falla, el contacto vuelve a recibir la pregunta pendiente).
+  if (contacto) {
+    if (plan.registro && campana) await db.guardarRegistro(contacto.id, campana.id, plan.registro);
+    await db.actualizarContacto(contacto.id, { ...plan.contacto, ultima_interaccion: new Date() });
+    if (envio && plan.respuesta) {
+      await db.registrarRespuesta(envio.id, respuestaFinal(envio.respuesta, plan.respuesta));
+    }
+  }
 
   for (const accion of plan.acciones) {
     try {
       await enviarAccion(celular, accion);
     } catch (err) {
       console.error(`[out] ${celular} error enviando:`, err.message);
+      break; // no mandar la pregunta siguiente sin la anterior
     }
   }
 
-  if (contacto) {
-    await db.actualizarContacto(contacto.id, { ...plan.contacto, ultima_interaccion: new Date() });
-    if (envio && plan.respuesta) {
-      await db.registrarRespuesta(envio.id, respuestaFinal(envio.respuesta, plan.respuesta));
-    }
-  }
-  console.log(`[out] ${celular} -> ${plan.respuesta || 'sin registro'}${plan.contacto.estado ? ` (estado: ${plan.contacto.estado})` : ''}`);
+  const r = plan.registro;
+  console.log(
+    `[out] ${celular} -> ${plan.respuesta || 'sin respuesta'}` +
+      (r ? ` · paso ${r.paso || registro?.paso} · ${r.clasificacion}` : '') +
+      (plan.contacto.estado ? ` (estado: ${plan.contacto.estado})` : '')
+  );
 }
 
 /** Ejecuta una acción de la conversación vía whatsapp.js. */
@@ -427,6 +449,7 @@ async function enviarAccion(celular, accion) {
     return wa.enviarCtaUrl(celular, accion.cuerpo, accion.boton, accion.url);
   }
   if (accion.tipo === 'botones') return wa.enviarBotones(celular, accion.cuerpo, accion.botones);
+  if (accion.tipo === 'lista') return wa.enviarLista(celular, accion.cuerpo, accion.boton, accion.seccion, accion.filas);
   console.warn('[out] acción desconocida:', accion.tipo);
 }
 
