@@ -20,6 +20,7 @@ const stats = require('./stats');
 const respuestas = require('./respuestas');
 const analisis = require('./analisis');
 const auth = require('./auth');
+const seg = require('./seguridad');
 const { decidir, respuestaFinal } = require('./conversacion');
 
 const PORT = Number(process.env.PORT || 3000);
@@ -31,7 +32,17 @@ const PUBLIC_URL = (process.env.PUBLIC_URL || '').replace(/\/+$/, '');
 
 const app = express();
 app.set('trust proxy', 1); // detrás del proxy HTTPS de Hostinger (req.secure)
-app.use(express.json({ verify: (req, _res, buf) => { req.rawBody = buf; } }));
+app.disable('x-powered-by');
+app.use(seg.cabeceras);
+
+// Límites por IP: general (bots/escáneres) y estricto para el login.
+const limiteGeneral = seg.limitador({ ventanaMs: 60 * 1000, max: 120 });
+// El webhook queda fuera: Meta envía ráfagas de acuses durante una campaña (y va firmado).
+app.use((req, res, next) => (req.path === '/webhook' ? next() : limiteGeneral(req, res, next)));
+app.use('/api/login', seg.limitador({ ventanaMs: 15 * 60 * 1000, max: 20, mensaje: 'Demasiados intentos. Espere 15 minutos.' }));
+app.use(['/api', '/stats'], seg.sinCache);
+
+app.use(express.json({ limit: '256kb', verify: (req, _res, buf) => { req.rawBody = buf; } }));
 
 // ─── Panel público de seguimiento ───────────────────────────
 const PUBLIC_DIR = path.join(__dirname, '..', 'public');
@@ -50,8 +61,7 @@ app.get('/api/campanas', async (_req, res) => {
   try {
     res.json(await db.listarCampanas());
   } catch (err) {
-    console.error('[campanas] error:', err.message);
-    res.status(500).json({ error: err.message });
+    seg.fallo(res, 'campanas', err);
   }
 });
 
@@ -66,15 +76,16 @@ app.get('/stats', async (req, res) => {
     }
     res.json(cacheStats.get(campana).data);
   } catch (err) {
-    console.error('[stats] error:', err.message);
-    res.status(500).json({ error: err.message });
+    seg.fallo(res, 'stats', err);
   }
 });
 
 // Clic en "Quiero participar": registra y redirige al enlace de inscripción de la campaña.
 app.get('/r/:token', async (req, res) => {
   try {
-    const envio = await db.envioPorToken(req.params.token);
+    // Los tokens son aleatorios en hex/base64url: cualquier otra cosa no toca la base.
+    const token = /^[A-Za-z0-9_-]{8,64}$/.test(req.params.token) ? req.params.token : null;
+    const envio = token ? await db.envioPorToken(token) : null;
     const campana = envio ? await db.getCampana(envio.campana_id) : await db.campanaActiva();
     if (envio) {
       await db.registrarClic(envio.id);
@@ -83,8 +94,7 @@ app.get('/r/:token', async (req, res) => {
     if (!campana) return res.status(404).send('Enlace no disponible');
     res.redirect(302, campana.url_inscripcion);
   } catch (err) {
-    console.error('[r] error:', err.message);
-    res.status(500).send('error');
+    seg.fallo(res, 'r', err, { json: false });
   }
 });
 
@@ -94,9 +104,13 @@ app.post('/api/login', async (req, res) => {
   if (auth.bloqueado(ip)) return res.status(429).json({ error: 'Demasiados intentos. Espere 15 minutos.' });
 
   const { usuario, password } = req.body || {};
+  if (typeof usuario !== 'string' || typeof password !== 'string' || usuario.length > 64 || password.length > 256) {
+    auth.registrarFallo(ip);
+    return res.status(400).json({ error: 'Usuario o contraseña incorrectos' });
+  }
   try {
     const u = await auth.buscarUsuario(usuario);
-    if (!u || !auth.verificarPassword(password, u.hash)) {
+    if (!auth.verificarPassword(password, u ? u.hash : null) || !u) {
       auth.registrarFallo(ip);
       return res.status(401).json({ error: 'Usuario o contraseña incorrectos' });
     }
@@ -128,8 +142,7 @@ app.get('/api/respuestas', auth.requiereAuth, async (req, res) => {
   try {
     res.json(await respuestas.listar(req.query));
   } catch (err) {
-    console.error('[respuestas] error:', err.message);
-    res.status(500).json({ error: err.message });
+    seg.fallo(res, 'respuestas', err);
   }
 });
 
@@ -165,8 +178,7 @@ app.get('/api/analisis', auth.requiereAuth, async (req, res) => {
   try {
     res.json(await analisis.resumen(req.query));
   } catch (err) {
-    console.error('[analisis] error:', err.message);
-    res.status(500).json({ error: err.message });
+    seg.fallo(res, 'analisis', err);
   }
 });
 
@@ -178,8 +190,7 @@ app.get('/api/respuestas.xlsx', auth.requiereAuth, async (req, res) => {
     res.setHeader('Content-Disposition', `attachment; filename="respuestas-${Date.now()}.xlsx"`);
     res.send(Buffer.from(buf));
   } catch (err) {
-    console.error('[respuestas.xlsx] error:', err.message);
-    res.status(500).send('error');
+    seg.fallo(res, 'respuestas.xlsx', err, { json: false });
   }
 });
 
@@ -189,7 +200,7 @@ app.get('/webhook', (req, res) => {
   const token = req.query['hub.verify_token'];
   const challenge = req.query['hub.challenge'];
 
-  if (mode === 'subscribe' && token === VERIFY_TOKEN) {
+  if (VERIFY_TOKEN && mode === 'subscribe' && token === VERIFY_TOKEN) {
     console.log('[webhook] verificación OK');
     return res.status(200).send(String(challenge ?? ''));
   }
@@ -205,7 +216,13 @@ app.get('/webhook', (req, res) => {
 app.post('/webhook', (req, res) => {
   res.sendStatus(200); // responder de inmediato: Meta reintenta si tarda
 
-  if (APP_SECRET && !firmaValida(req)) {
+  // Solo se procesan eventos firmados por Meta: sin APP_SECRET no hay forma de
+  // distinguirlos de un POST falso (que haría enviar mensajes a cualquier número).
+  if (!APP_SECRET) {
+    console.warn('[webhook] falta APP_SECRET — evento ignorado');
+    return;
+  }
+  if (!firmaValida(req)) {
     console.warn('[webhook] firma X-Hub-Signature-256 inválida — evento ignorado');
     return;
   }
@@ -215,10 +232,16 @@ app.post('/webhook', (req, res) => {
   });
 });
 
-// Errores de parseo de JSON u otros: responder 200 igual (evitar reintentos).
-app.use((err, _req, res, _next) => {
+// Rutas inexistentes (escáneres buscando /.env, /wp-admin…): 404 sin detalles.
+app.use((_req, res) => res.status(404).type('text/plain').send('No encontrado'));
+
+// Errores de parseo de JSON u otros. Al webhook se le responde 200 (evitar reintentos de Meta);
+// al resto, un error genérico sin detalles internos.
+app.use((err, req, res, _next) => {
   console.error('[http] error:', err.message);
-  if (!res.headersSent) res.sendStatus(200);
+  if (res.headersSent) return;
+  if (req.path === '/webhook') return res.sendStatus(200);
+  res.status(err.status && err.status < 500 ? err.status : 500).type('text/plain').send('Solicitud inválida');
 });
 
 // ─── Lógica ─────────────────────────────────────────────────

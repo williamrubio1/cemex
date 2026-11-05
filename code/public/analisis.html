@@ -190,7 +190,7 @@
     <footer id="pie"></footer>
 
     <div id="identidad">
-      <img id="lm-logo" src="/logo.png" alt="Soluctia S.A.S." onerror="this.remove()" />
+      <img id="lm-logo" src="/logo.png" alt="Soluctia S.A.S." />
       <div class="lm-txt">
         <div class="lm-nombre" id="op-nombre">Soluctia S.A.S.</div>
         <div class="lm-linea" id="op-linea">Operador de la plataforma de mensajería por cuenta de CETEX.</div>
@@ -201,6 +201,13 @@
 </div>
 
 <script>
+  // Sin logo: quitar la imagen (no se usa onerror en línea por la CSP).
+  (function () {
+    const logo = document.getElementById('lm-logo');
+    if (!logo) return;
+    if (logo.complete && logo.naturalWidth === 0) logo.remove();
+    else logo.addEventListener('error', () => logo.remove());
+  })();
   const G = window.Graficas;
   const { fmt } = G;
   const $ = (id) => document.getElementById(id);

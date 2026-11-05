@@ -25,8 +25,16 @@ function hashPassword(plano) {
   return `${sal.toString('hex')}:${h.toString('hex')}`;
 }
 
+// Hash de relleno: si el usuario no existe se calcula igual el scrypt, para que el
+// tiempo de respuesta no revele qué usuarios existen.
+const HASH_RELLENO = hashPassword(crypto.randomBytes(16).toString('hex'));
+
 function verificarPassword(plano, guardado) {
-  const [salHex, hashHex] = String(guardado || '').split(':');
+  const [salHex, hashHex] = String(guardado || HASH_RELLENO).split(':');
+  if (!guardado) {
+    crypto.scryptSync(String(plano), Buffer.from(salHex, 'hex'), 64);
+    return false;
+  }
   if (!salHex || !hashHex) return false;
   const h = crypto.scryptSync(String(plano), Buffer.from(salHex, 'hex'), 64);
   const a = Buffer.from(hashHex, 'hex');
@@ -85,6 +93,11 @@ function requiereAuth(req, res, next) {
 
 // ─── Límite de intentos de login (memoria, por IP) ─────────
 const intentos = new Map();
+// Limpieza periódica para que el mapa no crezca sin límite con IPs de bots.
+setInterval(() => {
+  const ahora = Date.now();
+  for (const [ip, e] of intentos) if (e.hasta < ahora) intentos.delete(ip);
+}, 30 * 60 * 1000).unref();
 function registrarFallo(ip) {
   const e = intentos.get(ip) || { n: 0, hasta: 0 };
   e.n += 1;
