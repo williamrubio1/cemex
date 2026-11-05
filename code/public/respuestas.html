@@ -99,7 +99,10 @@
           <a href="/" style="color:var(--accent)">Panel público</a>
         </p>
       </div>
-      <a class="btn" href="/analisis">Ver análisis y gráficos →</a>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <a class="btn" href="/envios">Enviar lote</a>
+        <a class="btn" href="/analisis">Ver análisis y gráficos →</a>
+      </div>
     </div>
 
     <div class="barra">
@@ -138,6 +141,18 @@
         <option>BASE MEDELLIN</option>
         <option>MED-REGIMEN</option>
         <option>NORMAS PYMES</option>
+        <option value="PRUEBA">PRUEBA (números de prueba)</option>
+      </select>
+      <select id="f-ciudad">
+        <option value="">Ciudad: todas</option>
+        <option>Bogotá</option>
+        <option>Medellín / Antioquia</option>
+        <option>Cali / Suroccidente</option>
+        <option>Costa Caribe</option>
+        <option>Eje Cafetero</option>
+        <option>Santanderes</option>
+        <option>Otras regiones</option>
+        <option>Sin ciudad</option>
       </select>
       <input id="f-seminario" type="search" placeholder="Seminario previo contiene…" />
       <input id="f-q" type="search" placeholder="Buscar nombre, celular, empresa o correo" />
@@ -176,7 +191,7 @@
   // Filtros: [id del control, parámetro de la URL]
   const FILTROS = [
     ['f-campana','campana'], ['f-respuesta','respuesta'], ['f-entrega','entrega'], ['f-estado','estado'],
-    ['f-hoja','hoja'], ['f-seminario','seminario'], ['f-q','q'],
+    ['f-hoja','hoja'], ['f-ciudad','ciudad'], ['f-seminario','seminario'], ['f-q','q'],
     ['f-campofecha','campoFecha'], ['f-desde','desde'], ['f-hasta','hasta'],
   ];
   let pagina = 1;
@@ -293,6 +308,7 @@
         <td>${esc(f.nombre) || '<span class="no">—</span>'}</td>
         <td>${esc(f.celular)}</td>
         <td class="proc">${esc(f.empresa) || '<span class="no">—</span>'}</td>
+        <td>${esc(f.ciudad) || '<span class="no">—</span>'}</td>
         <td>${resp(f)}</td>
         <td>${f.clic_en ? '<span class="si">' + fecha(f.clic_en) + '</span>' : ''}</td>
         <td>${envio(f)}</td>
@@ -305,7 +321,7 @@
 
     $('cont').innerHTML = `<div class="tabla-cont"><table>
       <thead><tr>
-        <th>Nombre</th><th>Celular</th><th>Empresa</th><th>Respuesta</th><th>Clic participar</th>
+        <th>Nombre</th><th>Celular</th><th>Empresa</th><th>Ciudad</th><th>Respuesta</th><th>Clic participar</th>
         <th>Envío</th><th>Enviado</th><th>Leído</th><th>Respondió</th><th>Contacto</th><th>Base</th>
       </tr></thead><tbody>${filas}</tbody></table></div>`;
 

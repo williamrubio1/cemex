@@ -25,7 +25,9 @@ const NOMBRE_DEFECTO = process.env.TEMPLATE_NOMBRE_DEFECTO || 'estimado(a)';
 // (https://<dominio>/r/{{1}}). Vacío = URL estática, no se envía parámetro.
 const URL_BTN_INDEX = (process.env.TEMPLATE_URL_BOTON_INDEX || '').trim();
 
-const BASE_URL = `https://graph.facebook.com/${GRAPH_VERSION}/${PHONE_NUMBER_ID}/messages`;
+// WHATSAPP_API_BASE solo se usa en pruebas locales (simulador de la API); en producción, vacío.
+const API_BASE = (process.env.WHATSAPP_API_BASE || 'https://graph.facebook.com').replace(/\/+$/, '');
+const BASE_URL = `${API_BASE}/${GRAPH_VERSION}/${PHONE_NUMBER_ID}/messages`;
 
 // Meta espera el número en E.164 sin '+'
 const soloDigitos = (to) => String(to).replace(/\D/g, '');
@@ -43,12 +45,16 @@ async function llamarAPI(payload) {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify(payload),
+    signal: AbortSignal.timeout(30000), // que un envío colgado no frene el lote
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     const e = data.error || {};
     const detalle = e.error_data?.details ? ` — ${e.error_data.details}` : '';
-    throw new Error(`WhatsApp API ${res.status}: ${e.message || 'error'}${e.code ? ` (code ${e.code})` : ''}${detalle}`);
+    const err = new Error(`WhatsApp API ${res.status}: ${e.message || 'error'}${e.code ? ` (code ${e.code})` : ''}${detalle}`);
+    err.code = Number(e.code) || null; // para decidir si se pausa un lote o solo falla ese contacto
+    err.status = res.status;
+    throw err;
   }
   return data; // { messaging_product, contacts, messages: [{ id }] }
 }

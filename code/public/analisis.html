@@ -131,6 +131,7 @@
         <h1>Análisis de la campaña de WhatsApp</h1>
         <p><span id="nombre-campana">CETEX</span> · informe de resultados ·
           <a href="/respuestas">Ver respuestas</a> ·
+          <a href="/envios">Enviar lote</a> ·
           <a href="#" id="salir">Cerrar sesión</a></p>
       </div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
@@ -181,6 +182,17 @@
         <option>MED-REGIMEN</option>
         <option>NORMAS PYMES</option>
       </select>
+      <select id="f-ciudad">
+        <option value="">Ciudad: todas</option>
+        <option>Bogotá</option>
+        <option>Medellín / Antioquia</option>
+        <option>Cali / Suroccidente</option>
+        <option>Costa Caribe</option>
+        <option>Eje Cafetero</option>
+        <option>Santanderes</option>
+        <option>Otras regiones</option>
+        <option>Sin ciudad</option>
+      </select>
       <input id="f-seminario" type="search" placeholder="Seminario previo contiene…" />
       <button id="aplicar" class="primario" type="button">Aplicar</button>
     </div>
@@ -222,7 +234,7 @@
     ['f-campana', 'campana', 'Campaña'], ['f-campofecha', 'campoFecha', null],
     ['f-desde', 'desde', 'Desde'], ['f-hasta', 'hasta', 'Hasta'],
     ['f-respuesta', 'respuesta', 'Respuesta'], ['f-entrega', 'entrega', 'Entrega'],
-    ['f-hoja', 'hoja', 'Base'], ['f-seminario', 'seminario', 'Seminario'],
+    ['f-hoja', 'hoja', 'Base'], ['f-ciudad', 'ciudad', 'Ciudad'], ['f-seminario', 'seminario', 'Seminario'],
   ];
 
   function params(extra) {
@@ -438,6 +450,9 @@
       if (s.autenticado) { mostrar('panel'); cargar(); } else mostrar('login');
     } catch { mostrar('login'); }
   })();
+
+  // KPIs en vivo mientras la pestaña está visible.
+  setInterval(() => { if (!document.hidden && !$('vista-panel').hidden) cargar(); }, 30000);
 </script>
 </body>
 </html>

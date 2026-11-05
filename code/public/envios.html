@@ -1,0 +1,562 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="robots" content="noindex" />
+<title>Enviar lote — Campaña CETEX (interno)</title>
+<style>
+  :root {
+    --bg:#f6f6f3; --surface:#fff; --border:#e6e5df;
+    --text:#29292a; --muted:#70706a; --accent:#3f6b5e; --track:#ecebe5;
+    --ok:#3f6b5e; --fail:#b4534b; --skip:#b39a5c; --warn:#a8742c;
+    --shadow:0 1px 2px rgba(20,20,15,.04),0 1px 8px rgba(20,20,15,.03);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#191a19; --surface:#232421; --border:#34352f;
+      --text:#e9e8e2; --muted:#9b9b92; --accent:#77b0a0; --track:#2d2e29;
+      --ok:#77b0a0; --fail:#d27a70; --skip:#cdb67a; --warn:#d6a35c; --shadow:none; }
+  }
+  * { box-sizing:border-box; }
+  html,body { margin:0; }
+  body { background:var(--bg); color:var(--text);
+    font:14px/1.5 ui-sans-serif,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; }
+  .wrap { max-width:1160px; margin:0 auto; padding:28px 16px 56px; }
+  h1 { font-size:18px; font-weight:600; margin:0 0 4px; }
+  h2 { font-size:12px; font-weight:600; letter-spacing:.05em; text-transform:uppercase; color:var(--muted); margin:0 0 14px; }
+  .sub { color:var(--muted); font-size:13px; margin:0 0 20px; }
+  .sub a, a.lnk { color:var(--accent); }
+  select, input, textarea, button, a.btn {
+    font:inherit; font-size:13px; color:var(--text); background:var(--surface);
+    border:1px solid var(--border); border-radius:8px; padding:7px 10px;
+  }
+  textarea { width:100%; resize:vertical; min-height:38px; }
+  button, a.btn { cursor:pointer; text-decoration:none; box-shadow:var(--shadow); }
+  button:hover:not(:disabled), a.btn:hover { border-color:var(--muted); }
+  button:disabled { opacity:.5; cursor:default; }
+  button.primario { background:var(--accent); color:#fff; border-color:var(--accent); font-weight:600; }
+  button.peligro { color:var(--fail); }
+  a.btn { color:var(--accent); font-weight:600; }
+  .card { background:var(--surface); border:1px solid var(--border); border-radius:12px;
+    box-shadow:var(--shadow); padding:20px; margin-bottom:18px; }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:18px; }
+  .layout { display:grid; grid-template-columns:minmax(0,2fr) minmax(280px,1fr); gap:18px; align-items:start; }
+  .layout > .card { margin-bottom:18px; }
+  .resumen-card { position:sticky; top:12px; }
+  .prueba { display:grid; grid-template-columns:2fr 1fr auto; gap:12px; align-items:end; }
+  .prueba .campo { margin-bottom:0; }
+  #t-res { margin-top:12px; }
+  #campana { margin-bottom:14px; }
+  #t-res:empty { display:none; }
+  @media (max-width:980px) { .layout { grid-template-columns:1fr; } .resumen-card { position:static; } }
+  @media (max-width:860px) { .grid2 { grid-template-columns:1fr; } }
+  @media (max-width:640px) { .prueba { grid-template-columns:1fr; } }
+  .campo { margin-bottom:14px; }
+  .campo > label, .etq { display:block; font-size:12px; color:var(--muted); margin-bottom:5px; font-weight:600; }
+  .fila { display:flex; flex-wrap:wrap; gap:10px; align-items:center; }
+  .fila > input[type="number"] { width:120px; }
+  .ayuda { color:var(--muted); font-size:12px; margin:4px 0 0; }
+  .checks { display:flex; flex-wrap:wrap; gap:6px; max-height:180px; overflow:auto; }
+  .checks label { display:flex; align-items:center; gap:6px; font-size:12.5px; border:1px solid var(--border);
+    border-radius:20px; padding:4px 10px; cursor:pointer; user-select:none; }
+  .checks label.on { border-color:var(--accent); background:color-mix(in srgb, var(--accent) 12%, transparent); }
+  .checks input { margin:0; accent-color:var(--accent); }
+  .checks .n { color:var(--muted); font-size:11.5px; }
+  .opts label { display:flex; align-items:center; gap:7px; font-size:13px; margin:4px 0; cursor:pointer; }
+  .opts input { accent-color:var(--accent); }
+  .chips { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
+  .chip { font-size:12px; border-radius:20px; padding:3px 10px; background:var(--track); border:none; box-shadow:none; }
+  .resumen { background:var(--bg); border:1px solid var(--border); border-radius:10px; padding:14px; }
+  .resumen .big { font-size:26px; font-weight:700; line-height:1.1; }
+  .resumen ul { margin:8px 0 0; padding-left:18px; color:var(--muted); font-size:12.5px; }
+  .kv { display:grid; grid-template-columns:auto 1fr; gap:4px 14px; font-size:13px; margin-top:10px; }
+  .kv dt { color:var(--muted); } .kv dd { margin:0; font-weight:600; }
+
+  /* Progreso */
+  .barra { height:14px; background:var(--track); border-radius:8px; overflow:hidden; display:flex; margin:12px 0 8px; }
+  .barra > span { display:block; height:100%; transition:width .6s ease; }
+  .b-ok { background:var(--ok); } .b-fail { background:var(--fail); } .b-skip { background:var(--skip); }
+  .leyenda { display:flex; flex-wrap:wrap; gap:14px; font-size:12.5px; color:var(--muted); }
+  .leyenda i { display:inline-block; width:10px; height:10px; border-radius:3px; margin-right:5px; vertical-align:-1px; }
+  .stats4 { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-top:14px; }
+  @media (max-width:640px) { .stats4 { grid-template-columns:repeat(2,1fr); } }
+  .stat { border:1px solid var(--border); border-radius:10px; padding:10px 12px; }
+  .stat b { display:block; font-size:20px; }
+  .stat span { color:var(--muted); font-size:12px; }
+  .pill { display:inline-block; padding:2px 9px; border-radius:20px; font-size:11.5px; font-weight:600;
+    background:var(--track); white-space:nowrap; }
+  .pill.en_curso { background:color-mix(in srgb, var(--ok) 18%, transparent); color:var(--ok); }
+  .pill.esperando_cupo, .pill.pausado { background:color-mix(in srgb, var(--warn) 18%, transparent); color:var(--warn); }
+  .pill.cancelado { background:color-mix(in srgb, var(--fail) 15%, transparent); color:var(--fail); }
+  .motivo { margin-top:10px; font-size:13px; color:var(--warn); }
+  .acciones { display:flex; gap:8px; flex-wrap:wrap; margin-top:14px; }
+
+  /* Tablas */
+  .tabla-cont { overflow-x:auto; }
+  table { width:100%; border-collapse:collapse; font-size:13px; min-width:760px; }
+  th, td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--border); vertical-align:top; }
+  th { color:var(--muted); font-weight:600; font-size:11px; text-transform:uppercase; letter-spacing:.04em; }
+  tr:last-child td { border-bottom:none; }
+  .mini { height:6px; background:var(--track); border-radius:4px; overflow:hidden; display:flex; width:110px; margin-top:4px; }
+  .mini > span { display:block; height:100%; }
+  .res-ok { color:var(--ok); font-weight:600; } .res-err { color:var(--fail); }
+  .vacio { color:var(--muted); font-size:13px; }
+  .err { border-left:3px solid var(--fail); padding:10px 12px; background:var(--bg); border-radius:8px; color:var(--fail); font-size:13px; margin-top:10px; }
+
+  /* Login */
+  .login { max-width:340px; margin:8vh auto 0; background:var(--surface);
+    border:1px solid var(--border); border-radius:12px; padding:26px; box-shadow:var(--shadow); }
+  .login h2 { font-size:16px; text-transform:none; letter-spacing:0; color:var(--text); margin:0 0 4px; }
+  .login p { color:var(--muted); font-size:13px; margin:0 0 18px; }
+  .login label { display:block; font-size:12px; color:var(--muted); margin:12px 0 5px; }
+  .login input { width:100%; }
+  .login button { width:100%; margin-top:18px; padding:9px; }
+  .login .msg { color:#c0392b; font-size:13px; margin-top:12px; min-height:18px; }
+  [hidden] { display:none !important; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- Login -->
+  <div id="vista-login" hidden>
+    <div class="login">
+      <h2>Acceso interno</h2>
+      <p>Ingrese sus credenciales para lanzar envíos.</p>
+      <label for="u">Usuario</label>
+      <input id="u" type="text" autocomplete="username" autofocus />
+      <label for="p">Contraseña</label>
+      <input id="p" type="password" autocomplete="current-password" />
+      <button id="entrar" class="primario" type="button">Entrar</button>
+      <div class="msg" id="login-msg"></div>
+      <p style="margin-top:16px"><a class="lnk" href="/">← Panel público</a></p>
+    </div>
+  </div>
+
+  <div id="vista-app" hidden>
+    <div class="fila" style="justify-content:space-between;align-items:flex-start">
+      <div>
+        <h1>Enviar campaña por lotes</h1>
+        <p class="sub">
+          Sesión de <b id="quien"></b>. <a href="#" id="salir">Cerrar sesión</a> ·
+          <a href="/">Panel</a> · <a href="/respuestas">Respuestas</a> · <a href="/analisis">Análisis</a>
+        </p>
+      </div>
+      <select id="campana" title="Campaña"></select>
+    </div>
+
+    <!-- Lote activo -->
+    <div class="card" id="card-activo" hidden>
+      <div class="fila" style="justify-content:space-between">
+        <h2 style="margin:0">Lote <span id="a-id"></span> · <span id="a-nombre"></span></h2>
+        <span class="pill" id="a-estado"></span>
+      </div>
+      <div class="barra" id="a-barra"><span class="b-ok"></span><span class="b-fail"></span><span class="b-skip"></span></div>
+      <div class="leyenda">
+        <span><i class="b-ok"></i><b id="a-pct">0%</b> procesado</span>
+        <span><i class="b-ok"></i>Enviados</span><span><i class="b-fail"></i>Fallidos</span><span><i class="b-skip"></i>Omitidos</span>
+      </div>
+      <div class="stats4">
+        <div class="stat"><b id="a-env">0</b><span>Enviados de <span id="a-total">0</span></span></div>
+        <div class="stat"><b id="a-pend">0</b><span>Pendientes</span></div>
+        <div class="stat"><b id="a-trans">—</b><span>Tiempo transcurrido</span></div>
+        <div class="stat"><b id="a-eta">—</b><span>Tiempo restante estimado</span></div>
+      </div>
+      <p class="ayuda" id="a-detalle"></p>
+      <div class="motivo" id="a-motivo" hidden></div>
+      <div class="acciones">
+        <button type="button" id="a-pausar">Pausar</button>
+        <button type="button" id="a-reanudar" class="primario">Reanudar</button>
+        <button type="button" id="a-cancelar" class="peligro">Cancelar lote</button>
+      </div>
+    </div>
+
+    <!-- Prueba -->
+    <div class="card">
+      <h2>1 · Prueba</h2>
+      <p class="ayuda" style="margin:0 0 12px">Envía la plantilla aprobada a números puntuales. El +57 se agrega solo.
+        Estos números quedan como base <b>PRUEBA</b>: no entran en lotes ni en los KPIs.</p>
+      <div class="prueba">
+        <div class="campo">
+          <label for="t-numeros">Celulares (máx. 5, separados por coma)</label>
+          <textarea id="t-numeros" rows="1" placeholder="3007493393, 3142511033"></textarea>
+        </div>
+        <div class="campo">
+          <label for="t-nombre">Nombre para el saludo (opcional)</label>
+          <input id="t-nombre" type="text" placeholder="William" maxlength="60" style="width:100%" />
+        </div>
+        <div class="campo"><button type="button" id="t-enviar" class="primario">Enviar prueba</button></div>
+      </div>
+      <div id="t-res"></div>
+    </div>
+
+    <div class="layout">
+      <!-- Filtros -->
+      <div class="card">
+        <h2>2 · ¿A quién se envía?</h2>
+        <p class="ayuda" style="margin:-6px 0 14px">Solo se incluyen contactos que aún no recibieron esta campaña, no pidieron baja y no
+          están marcados sin WhatsApp. <span id="f-disp"></span></p>
+        <div class="grid2">
+          <div>
+            <div class="campo"><span class="etq">Base de origen</span><div class="checks" id="f-hojas"></div></div>
+            <div class="campo"><span class="etq">Ciudad / región</span><div class="checks" id="f-ciudades"></div>
+              <p class="ayuda">Deducida de la hoja del Excel y del indicativo del teléfono fijo.</p></div>
+            <div class="campo">
+              <label for="f-empresa">Empresas específicas</label>
+              <div class="fila">
+                <input id="f-empresa" type="search" list="dl-empresas" placeholder="Escriba y elija una empresa" style="flex:1;min-width:160px" />
+                <button type="button" id="f-empresa-add">Agregar</button>
+              </div>
+              <datalist id="dl-empresas"></datalist>
+              <div class="chips" id="f-empresas-chips"></div>
+            </div>
+          </div>
+          <div>
+            <div class="campo">
+              <label for="f-contiene">Empresa contiene</label>
+              <input id="f-contiene" type="search" placeholder="Ej. S.A.S, hospital, transportes…" style="width:100%" />
+            </div>
+            <div class="campo">
+              <label for="f-seminario">Seminario previo contiene</label>
+              <input id="f-seminario" type="search" placeholder="Ej. NIIF, exógena, comercio exterior…" style="width:100%" />
+            </div>
+            <div class="campo opts">
+              <label><input type="checkbox" id="f-nuevos" /> Solo nunca contactados en otras campañas</label>
+              <label><input type="checkbox" id="f-connombre" /> Solo con nombre (saludo personalizado)</label>
+              <label><input type="checkbox" id="f-concorreo" /> Solo con correo (para seguimiento por otro medio)</label>
+            </div>
+            <div class="campo">
+              <span class="etq">Cantidad, orden y ritmo</span>
+              <div class="fila">
+                <input id="f-cantidad" type="number" min="1" placeholder="Todos" title="Cantidad máxima" />
+                <select id="f-orden" title="Orden">
+                  <option value="base">Orden de la base</option>
+                  <option value="aleatorio">Aleatorio</option>
+                  <option value="empresa">Por empresa</option>
+                  <option value="ciudad">Por ciudad</option>
+                </select>
+              </div>
+              <div class="fila" style="margin-top:8px">
+                <label class="ayuda" style="margin:0">Tope diario <input id="f-tope" type="number" min="1" value="250" style="width:90px" /></label>
+                <label class="ayuda" style="margin:0">Mensajes/seg <input id="f-mps" type="number" min="0.5" max="20" step="0.5" value="5" style="width:70px" /></label>
+              </div>
+              <p class="ayuda">El tope diario es el límite de Meta de destinatarios nuevos por 24 h (250, 2.000, 10.000…; véalo en
+                WhatsApp Manager). Al alcanzarlo el lote espera y continúa solo.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Resumen del lote -->
+      <div class="card resumen-card">
+        <h2>3 · Resumen y lanzamiento</h2>
+        <div class="resumen">
+          <div class="big" id="r-sel">—</div>
+          <div class="vacio" id="r-sub">contactos se enviarán</div>
+          <dl class="kv">
+            <dt>Costo estimado</dt><dd id="r-costo">—</dd>
+            <dt>Duración estimada</dt><dd id="r-dur">—</dd>
+            <dt>Con nombre para el saludo</dt><dd id="r-nom">—</dd>
+            <dt>Usados en las últimas 24 h</dt><dd id="r-usados">—</dd>
+          </dl>
+          <ul id="r-desglose"></ul>
+        </div>
+        <div class="campo" style="margin-top:14px">
+          <label for="l-nombre">Nombre del lote (opcional)</label>
+          <input id="l-nombre" type="text" maxlength="200" placeholder="Ej. Bogotá · primeras 1.000" style="width:100%" />
+        </div>
+        <button type="button" id="l-lanzar" class="primario" style="width:100%;padding:10px">Lanzar lote</button>
+        <div id="l-err"></div>
+      </div>
+    </div>
+
+    <!-- Historial -->
+    <div class="card">
+      <h2>Historial de lotes</h2>
+      <div class="tabla-cont" id="historial"><p class="vacio">Cargando…</p></div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s ?? '').replace(/[<>&"]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c]));
+  const fmt = (n) => Number(n || 0).toLocaleString('es-CO');
+  const ESTADO = { en_curso: 'Enviando', esperando_cupo: 'Esperando cupo', pausado: 'Pausado', completado: 'Completado', cancelado: 'Cancelado' };
+  const ABIERTOS = ['en_curso', 'esperando_cupo', 'pausado'];
+  let costo = 0.0125;
+  let opciones = null;
+  let empresasSel = [];
+  let desfase = 0; // reloj del servidor - reloj local
+  let ultimoLotes = null;
+
+  function mostrar(v) { $('vista-login').hidden = v !== 'login'; $('vista-app').hidden = v !== 'app'; }
+
+  async function api(url, cuerpo) {
+    const r = await fetch(url, cuerpo === undefined ? { cache: 'no-store' } : {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cuerpo),
+    });
+    if (r.status === 401) { mostrar('login'); throw new Error('Sesión vencida'); }
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || 'HTTP ' + r.status);
+    return d;
+  }
+
+  function duracion(seg) {
+    if (!Number.isFinite(seg) || seg < 0) return '—';
+    seg = Math.round(seg);
+    const d = Math.floor(seg / 86400), h = Math.floor((seg % 86400) / 3600), m = Math.floor((seg % 3600) / 60), s = seg % 60;
+    if (d) return `${d} d ${h} h`;
+    if (h) return `${h} h ${m} min`;
+    if (m) return `${m} min ${String(s).padStart(2, '0')} s`;
+    return `${s} s`;
+  }
+
+  // ── Sesión ──
+  async function init() {
+    try { const c = await (await fetch('/api/config')).json(); costo = Number(c.costoMensajeUsd) || costo; } catch {}
+    try {
+      const s = await (await fetch('/api/session')).json();
+      if (s.autenticado) { $('quien').textContent = s.usuario; arrancar(); } else mostrar('login');
+    } catch { mostrar('login'); }
+  }
+  async function entrar() {
+    $('login-msg').textContent = '';
+    try {
+      const r = await fetch('/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ usuario: $('u').value, password: $('p').value }) });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'No se pudo entrar');
+      $('quien').textContent = d.usuario; $('p').value = ''; arrancar();
+    } catch (e) { $('login-msg').textContent = e.message; }
+  }
+  $('entrar').addEventListener('click', entrar);
+  $('p').addEventListener('keydown', (e) => { if (e.key === 'Enter') entrar(); });
+  $('salir').addEventListener('click', async (e) => { e.preventDefault(); await fetch('/api/logout', { method: 'POST' }); mostrar('login'); });
+
+  let arrancado = false;
+  async function arrancar() {
+    mostrar('app');
+    if (!arrancado) {
+      arrancado = true;
+      const lista = await api('/api/campanas');
+      $('campana').innerHTML = lista.map((c) => `<option value="${c.id}">${esc(c.nombre)}</option>`).join('');
+      $('campana').addEventListener('change', () => { empresasSel = []; cargarOpciones(); });
+      setInterval(() => { if (!document.hidden) cargarLotes(); }, 3000);
+      setInterval(() => { if (!document.hidden && ultimoLotes) pintarActivo(ultimoLotes); }, 1000);
+    }
+    await cargarOpciones();
+    cargarLotes();
+  }
+
+  // ── Opciones de filtros ──
+  function checks(cont, items) {
+    $(cont).innerHTML = items.length
+      ? items.map((it) => `<label><input type="checkbox" value="${esc(it.k)}" /> ${esc(it.k)} <span class="n">${fmt(it.n)}</span></label>`).join('')
+      : '<span class="vacio">Sin opciones</span>';
+  }
+  async function cargarOpciones() {
+    try {
+      opciones = await api('/api/lotes/opciones?campana=' + encodeURIComponent($('campana').value));
+      checks('f-hojas', opciones.hojas);
+      checks('f-ciudades', opciones.ciudades);
+      $('dl-empresas').innerHTML = opciones.empresas.map((e) => `<option value="${esc(e.k)}">${fmt(e.n)} contacto(s)</option>`).join('');
+      $('f-disp').textContent = `Disponibles en esta campaña: ${fmt(opciones.disponibles)}.`;
+      pintarEmpresas();
+      previsualizar();
+    } catch (e) {
+      $('f-disp').textContent = 'No se pudieron cargar las opciones: ' + e.message;
+    }
+  }
+  const marcados = (cont) => [...$(cont).querySelectorAll('input:checked')].map((i) => i.value);
+
+  function pintarEmpresas() {
+    $('f-empresas-chips').innerHTML = empresasSel.map((e, i) =>
+      `<button type="button" class="chip" data-quitar="${i}" title="Quitar">${esc(e)} ✕</button>`).join('');
+  }
+  $('f-empresas-chips').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-quitar]'); if (!b) return;
+    empresasSel.splice(Number(b.dataset.quitar), 1); pintarEmpresas(); previsualizar();
+  });
+  function agregarEmpresa() {
+    const v = $('f-empresa').value.trim();
+    if (!v) return;
+    if (!empresasSel.includes(v)) empresasSel.push(v);
+    $('f-empresa').value = ''; pintarEmpresas(); previsualizar();
+  }
+  $('f-empresa-add').addEventListener('click', agregarEmpresa);
+  $('f-empresa').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); agregarEmpresa(); } });
+
+  function filtros() {
+    return {
+      hojas: marcados('f-hojas'), ciudades: marcados('f-ciudades'), empresas: empresasSel,
+      empresaContiene: $('f-contiene').value.trim(), seminario: $('f-seminario').value.trim(),
+      soloNuevos: $('f-nuevos').checked, conNombre: $('f-connombre').checked, conCorreo: $('f-concorreo').checked,
+      cantidad: $('f-cantidad').value, orden: $('f-orden').value,
+    };
+  }
+
+  // ── Vista previa ──
+  let tPrev = null, nPrev = 0;
+  function previsualizar() { clearTimeout(tPrev); tPrev = setTimeout(hacerPrevia, 300); }
+  document.addEventListener('change', (e) => {
+    const l = e.target.closest('.checks label'); if (l) l.classList.toggle('on', e.target.checked);
+    if (e.target.closest('.card') && e.target.id !== 'campana' && !e.target.closest('#card-activo')) previsualizar();
+  });
+  for (const id of ['f-contiene', 'f-seminario', 'f-cantidad', 'f-tope', 'f-mps']) $(id).addEventListener('input', previsualizar);
+
+  async function hacerPrevia() {
+    const n = ++nPrev;
+    try {
+      const d = await api('/api/lotes/previsualizar', { campana: $('campana').value, filtros: filtros() });
+      if (n !== nPrev) return; // llegó una más nueva
+      const sel = d.seleccionados;
+      $('r-sel').textContent = fmt(sel);
+      $('r-sub').textContent = `contactos se enviarán · ${fmt(d.coinciden)} cumplen los filtros · ${fmt(d.nEmpresas)} empresas`;
+      $('r-costo').textContent = `≈ USD ${(sel * costo).toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (solo se cobran los entregados)`;
+      const mps = Math.max(0.5, Number($('f-mps').value) || 5);
+      const tope = Number($('f-tope').value) || 0;
+      const usados = opciones ? opciones.usados24h : 0;
+      let dur = duracion(sel / mps);
+      if (tope && sel > Math.max(0, tope - usados)) {
+        const dias = Math.ceil((sel - Math.max(0, tope - usados)) / tope);
+        dur += ` + espera de cupo (~${dias} día${dias > 1 ? 's' : ''} más por el tope de ${fmt(tope)})`;
+      }
+      $('r-dur').textContent = dur;
+      $('r-nom').textContent = d.coinciden ? `${fmt(d.conNombre)} de ${fmt(d.coinciden)}` : '—';
+      $('r-usados').textContent = tope ? `${fmt(usados)} de ${fmt(tope)}` : fmt(usados);
+      const li = [];
+      if (d.porCiudad.length) li.push('Ciudades: ' + d.porCiudad.slice(0, 5).map((x) => `${esc(x.k)} ${fmt(x.n)}`).join(' · '));
+      if (d.porHoja.length) li.push('Bases: ' + d.porHoja.map((x) => `${esc(x.k)} ${fmt(x.n)}`).join(' · '));
+      if (d.empresas.length) li.push('Empresas con más contactos: ' + d.empresas.slice(0, 5).map((x) => `${esc(x.k)} (${fmt(x.n)})`).join(', '));
+      $('r-desglose').innerHTML = li.map((x) => `<li>${x}</li>`).join('');
+      $('l-lanzar').disabled = !sel || lotesActivos();
+    } catch (e) {
+      $('r-sel').textContent = '—'; $('r-sub').textContent = e.message;
+    }
+  }
+
+  // ── Lanzar ──
+  $('l-lanzar').addEventListener('click', async () => {
+    $('l-err').innerHTML = '';
+    const sel = $('r-sel').textContent;
+    if (!confirm(`¿Lanzar el lote a ${sel} contactos?\n\nCosto estimado: ${$('r-costo').textContent}\nLos mensajes de marketing no se pueden deshacer una vez enviados.`)) return;
+    const b = $('l-lanzar'); b.disabled = true; b.textContent = 'Creando lote…';
+    try {
+      await api('/api/lotes', {
+        campana: $('campana').value, filtros: filtros(), nombre: $('l-nombre').value,
+        tope_diario: $('f-tope').value, mps: $('f-mps').value,
+      });
+      $('l-nombre').value = '';
+      await cargarLotes(); await cargarOpciones();
+      $('card-activo').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } catch (e) {
+      $('l-err').innerHTML = `<div class="err">${esc(e.message)}</div>`;
+    } finally { b.textContent = 'Lanzar lote'; b.disabled = false; previsualizar(); }
+  });
+
+  // ── Prueba ──
+  $('t-enviar').addEventListener('click', async () => {
+    const b = $('t-enviar'); b.disabled = true; b.textContent = 'Enviando…'; $('t-res').innerHTML = '';
+    try {
+      const d = await api('/api/prueba', { campana: $('campana').value, numeros: $('t-numeros').value, nombre: $('t-nombre').value });
+      $('t-res').innerHTML = d.resultados.map((r) => r.ok
+        ? `<div class="res-ok">✓ ${esc(r.numero)} · enviado (saludo: “Hola ${esc(r.saludo)}”)</div>`
+        : `<div class="res-err">✗ ${esc(r.numero)} · ${esc(r.error)}</div>`).join('') +
+        `<p class="ayuda">Plantilla <b>${esc(d.plantilla)}</b>. Las respuestas se ven en <a class="lnk" href="/respuestas?hoja=PRUEBA">Respuestas → base PRUEBA</a>.</p>`;
+    } catch (e) {
+      $('t-res').innerHTML = `<div class="err">${esc(e.message)}</div>`;
+    } finally { b.disabled = false; b.textContent = 'Enviar prueba'; }
+  });
+
+  // ── Lotes: activo + historial ──
+  const lotesActivos = () => !!(ultimoLotes && ultimoLotes.lotes.some((l) => l.estado === 'en_curso' || l.estado === 'esperando_cupo'));
+  const ahoraServidor = () => Date.now() + desfase;
+
+  async function cargarLotes() {
+    try {
+      const d = await api('/api/lotes');
+      desfase = new Date(d.ahora).getTime() - Date.now();
+      const antes = ultimoLotes && ultimoLotes.lotes[0];
+      ultimoLotes = d;
+      if (opciones) opciones.usados24h = d.usados24h;
+      pintarActivo(d); pintarHistorial(d);
+      // Al terminar un lote, refrescar los disponibles.
+      if (antes && d.lotes[0] && antes.id === d.lotes[0].id && ABIERTOS.includes(antes.estado) && !ABIERTOS.includes(d.lotes[0].estado)) cargarOpciones();
+      $('l-lanzar').disabled = lotesActivos() || $('r-sel').textContent === '0';
+      $('l-lanzar').title = lotesActivos() ? 'Hay un lote enviándose; páuselo o espere a que termine' : '';
+    } catch { /* se reintenta en 3 s */ }
+  }
+
+  function segmentos(l) {
+    const t = Math.max(1, l.total);
+    return [l.enviados / t * 100, l.fallidos / t * 100, l.omitidos / t * 100];
+  }
+
+  function pintarActivo(d) {
+    const l = d.lotes.find((x) => ABIERTOS.includes(x.estado)) || (d.lotes[0] && !ABIERTOS.includes(d.lotes[0].estado) &&
+      d.lotes[0].finalizado_en && (ahoraServidor() - new Date(d.lotes[0].finalizado_en)) < 10 * 60e3 ? d.lotes[0] : null);
+    $('card-activo').hidden = !l;
+    if (!l) return;
+    $('a-id').textContent = '#' + l.id;
+    $('a-nombre').textContent = l.nombre || l.campana;
+    $('a-estado').className = 'pill ' + l.estado;
+    $('a-estado').textContent = ESTADO[l.estado] || l.estado;
+    const [a, b, c] = segmentos(l);
+    const sp = $('a-barra').children;
+    sp[0].style.width = a + '%'; sp[1].style.width = b + '%'; sp[2].style.width = c + '%';
+    $('a-pct').textContent = Math.floor((l.procesados / Math.max(1, l.total)) * 100) + '%';
+    $('a-env').textContent = fmt(l.enviados);
+    $('a-total').textContent = fmt(l.total);
+    $('a-pend').textContent = fmt(l.pendientes);
+    const fin = l.finalizado_en ? new Date(l.finalizado_en).getTime() : ahoraServidor();
+    $('a-trans').textContent = duracion((fin - new Date(l.creado_en).getTime()) / 1000);
+    let eta = '—';
+    if (l.estado === 'en_curso' && l.pendientes) eta = duracion(l.pendientes / Math.max(0.5, l.mps));
+    else if (l.estado === 'esperando_cupo') eta = 'Esperando cupo';
+    else if (l.estado === 'completado') eta = 'Terminado';
+    $('a-eta').textContent = eta;
+    $('a-detalle').textContent = `Fallidos ${fmt(l.fallidos)} · Omitidos ${fmt(l.omitidos)} · ${l.mps} msg/s` +
+      (l.tope_diario ? ` · tope ${fmt(l.tope_diario)}/24 h (usados ${fmt(d.usados24h)})` : '') +
+      ` · lanzado por ${l.creado_por || '—'} el ${new Date(l.creado_en).toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short' })}`;
+    $('a-motivo').hidden = !l.motivo;
+    $('a-motivo').textContent = l.motivo || '';
+    $('a-pausar').hidden = !(l.estado === 'en_curso' || l.estado === 'esperando_cupo');
+    $('a-reanudar').hidden = l.estado !== 'pausado';
+    $('a-cancelar').hidden = !ABIERTOS.includes(l.estado);
+    $('card-activo').dataset.id = l.id;
+  }
+
+  async function accion(que) {
+    const id = $('card-activo').dataset.id;
+    if (que === 'cancelar' && !confirm('¿Cancelar el lote? Los pendientes no se enviarán (los ya enviados no se deshacen).')) return;
+    try { await api(`/api/lotes/${id}/${que}`, {}); await cargarLotes(); if (que === 'cancelar') cargarOpciones(); }
+    catch (e) { alert(e.message); }
+  }
+  $('a-pausar').addEventListener('click', () => accion('pausar'));
+  $('a-reanudar').addEventListener('click', () => accion('reanudar'));
+  $('a-cancelar').addEventListener('click', () => accion('cancelar'));
+
+  function pintarHistorial(d) {
+    if (!d.lotes.length) { $('historial').innerHTML = '<p class="vacio">Aún no se ha lanzado ningún lote.</p>'; return; }
+    $('historial').innerHTML = `<table><thead><tr>
+      <th>#</th><th>Lote</th><th>Estado</th><th>Progreso</th><th>Enviados</th><th>Fallidos</th><th>Omitidos</th><th>Lanzado</th><th>Duración</th>
+      </tr></thead><tbody>${d.lotes.map((l) => {
+        const [a, b, c] = segmentos(l);
+        const fin = l.finalizado_en ? new Date(l.finalizado_en).getTime() : ahoraServidor();
+        return `<tr>
+          <td>${l.id}</td>
+          <td>${esc(l.nombre || '—')}<div class="vacio">${esc(l.campana)}</div></td>
+          <td><span class="pill ${l.estado}">${ESTADO[l.estado] || esc(l.estado)}</span></td>
+          <td>${fmt(l.procesados)} / ${fmt(l.total)}<div class="mini"><span class="b-ok" style="width:${a}%"></span><span class="b-fail" style="width:${b}%"></span><span class="b-skip" style="width:${c}%"></span></div></td>
+          <td>${fmt(l.enviados)}</td><td>${fmt(l.fallidos)}</td><td>${fmt(l.omitidos)}</td>
+          <td>${new Date(l.creado_en).toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short' })}<div class="vacio">${esc(l.creado_por || '')}</div></td>
+          <td>${duracion((fin - new Date(l.creado_en).getTime()) / 1000)}</td>
+        </tr>`;
+      }).join('')}</tbody></table>`;
+  }
+
+  init();
+</script>
+</body>
+</html>

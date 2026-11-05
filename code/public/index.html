@@ -106,10 +106,11 @@
       </select>
       <a class="navbtn" href="/respuestas">Respuestas</a>
       <a class="navbtn" href="/analisis">Análisis y gráficos</a>
+      <a class="navbtn" href="/envios">Enviar lote</a>
       <button id="recargar" type="button">Actualizar</button>
     </div>
   </header>
-  <p class="acceso">Las vistas <b>Respuestas</b> y <b>Análisis</b> son de uso interno y piden usuario y contraseña.</p>
+  <p class="acceso">Las vistas <b>Respuestas</b>, <b>Análisis</b> y <b>Enviar lote</b> son de uso interno y piden usuario y contraseña.</p>
 
   <div id="err" class="err" hidden></div>
 
@@ -277,7 +278,7 @@
     ]);
 
     $('pie').textContent = 'Datos agregados, sin información personal. Actualizado ' +
-      new Date(d.generado).toLocaleString('es-CO') + ' · se actualiza solo cada minuto.';
+      new Date(d.generado).toLocaleString('es-CO') + ' · se actualiza solo cada 15 segundos.';
   }
 
   const btn = $('recargar');
@@ -313,7 +314,8 @@
   });
 
   cargarCampanas().then(cargar);
-  setInterval(cargar, 60000);
+  // KPIs en vivo (el servidor cachea /stats 15 s); en pestañas ocultas no consulta.
+  setInterval(() => { if (!document.hidden) cargar(); }, 15000);
 </script>
 </body>
 </html>

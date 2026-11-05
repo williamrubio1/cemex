@@ -6,6 +6,7 @@
  * Uso:
  *   node src/import.js <archivo.xlsx> [--dry] [--sql [salida.sql]] [--hojas "BOGOTA,BASE MEDELLIN"]
  *   npm run import -- ../datos/Base_Bogota_organizada.xlsx --dry
+ *   node src/import.js <archivo.xlsx> --sql-ciudades   (solo UPDATE de la ciudad -> importaciones/ciudades.sql)
  *
  * --dry   : no escribe nada; muestra el resumen por hoja.
  * --sql   : no conecta a la base; genera un .sql para pegar en phpMyAdmin
@@ -26,6 +27,7 @@ const fs = require('fs');
 const path = require('path');
 const ExcelJS = require('exceljs');
 const { extraerCelulares, celularesExcluidos } = require('./telefonos');
+const { ciudadPorFijo, ciudadPorHoja } = require('./ciudades');
 
 const ALIAS = {
   nombre: ['nombre', 'participante', 'nombrecompleto', 'contacto'],
@@ -99,7 +101,15 @@ async function main() {
     modoSql && args[sqlIdx + 1] && !args[sqlIdx + 1].startsWith('--')
       ? args[sqlIdx + 1]
       : path.join('importaciones', 'contactos.sql');
-  const consumidos = new Set([hojasIdx !== -1 ? args[hojasIdx + 1] : null, modoSql ? sqlSalida : null].filter(Boolean));
+  const ciuIdx = args.indexOf('--sql-ciudades');
+  const modoCiudades = ciuIdx !== -1;
+  const ciudadesSalida =
+    modoCiudades && args[ciuIdx + 1] && !args[ciuIdx + 1].startsWith('--')
+      ? args[ciuIdx + 1]
+      : path.join('importaciones', 'ciudades.sql');
+  const consumidos = new Set(
+    [hojasIdx !== -1 ? args[hojasIdx + 1] : null, modoSql ? sqlSalida : null, modoCiudades ? ciudadesSalida : null].filter(Boolean)
+  );
   const archivo = args.find((a) => !a.startsWith('--') && !consumidos.has(a));
 
   if (!archivo) {
@@ -141,16 +151,20 @@ async function main() {
       const empresa = texto(valorCelda(row, mapa.empresa));
       const correo = (texto(valorCelda(row, mapa.correo)).match(/[^\s;,]+@[^\s;,]+\.[a-z]{2,}/i) || [''])[0].toLowerCase();
       const seminario = texto(valorCelda(row, mapa.seminario));
+      const ciudadFijo = ciudadPorFijo(valorCelda(row, mapa.telefono), valorCelda(row, mapa.celular));
 
       let c = contactos.get(celular);
       if (!c) {
-        c = { celular, nombre: '', empresa: '', correo: '', hojas: new Set(), seminarios: new Set() };
+        c = { celular, nombre: '', empresa: '', correo: '', ciudadFijo: null, ciudadHoja: null, hojas: new Set(), seminarios: new Set() };
         contactos.set(celular, c);
         r.nuevos++;
       }
       if (!c.nombre && nombre) c.nombre = tituloCase(nombre);
       if (!c.empresa && empresa) c.empresa = empresa;
       if (!c.correo && correo) c.correo = correo;
+      // El indicativo del fijo (en cualquier fila) pesa más que la hoja.
+      if (!c.ciudadFijo && ciudadFijo) c.ciudadFijo = ciudadFijo;
+      if (!c.ciudadHoja) c.ciudadHoja = ciudadPorHoja(ws.name);
       c.hojas.add(ws.name);
       if (seminario) c.seminarios.add(seminario);
     }
@@ -162,6 +176,7 @@ async function main() {
     nombre: c.nombre.slice(0, 160) || null,
     primer_nombre: primerNombre(c.nombre),
     empresa: c.empresa.slice(0, 200) || null,
+    ciudad: c.ciudadFijo || c.ciudadHoja || null,
     correo: c.correo.slice(0, 255) || null,
     hoja_origen: [...c.hojas].join('; ').slice(0, 255),
     seminarios_previos: [...c.seminarios].join('; ') || null,
@@ -171,19 +186,33 @@ async function main() {
   let actualizados = 0;
   const errores = [];
 
-  if (modoSql) {
+  if (modoCiudades) {
+    // Solo actualiza la ciudad de contactos que ya existen (no inserta ni toca otros campos).
+    const conCiudad = filas.filter((f) => f.ciudad);
+    fs.mkdirSync(path.dirname(ciudadesSalida), { recursive: true });
+    const out = fs.createWriteStream(ciudadesSalida, { encoding: 'utf8' });
+    out.write('-- Generado por src/import.js --sql-ciudades  ·  importar en phpMyAdmin (requiere db/002_lotes_ciudad.sql)\n');
+    out.write('SET NAMES utf8mb4;\n\n');
+    for (let i = 0; i < conCiudad.length; i += 500) {
+      const lote = conCiudad.slice(i, i + 500);
+      out.write('UPDATE contactos SET ciudad = CASE celular\n');
+      out.write(lote.map((f) => `  WHEN ${sqlLit(f.celular)} THEN ${sqlLit(f.ciudad)}`).join('\n'));
+      out.write(`\n  ELSE ciudad END\nWHERE celular IN (${lote.map((f) => sqlLit(f.celular)).join(', ')});\n\n`);
+    }
+    await new Promise((r) => out.end(r));
+  } else if (modoSql) {
     fs.mkdirSync(path.dirname(sqlSalida), { recursive: true });
     const out = fs.createWriteStream(sqlSalida, { encoding: 'utf8' });
     out.write('-- Generado por src/import.js  ·  pegar en phpMyAdmin (SQL) o importar el archivo\n');
     out.write('SET NAMES utf8mb4;\n\n');
-    const cols = ['celular', 'nombre', 'primer_nombre', 'empresa', 'correo', 'hoja_origen', 'seminarios_previos'];
+    const cols = ['celular', 'nombre', 'primer_nombre', 'empresa', 'ciudad', 'correo', 'hoja_origen', 'seminarios_previos'];
     for (let i = 0; i < filas.length; i += 500) {
       const lote = filas.slice(i, i + 500);
       out.write(`INSERT INTO contactos (${cols.join(', ')}) VALUES\n`);
       out.write(lote.map((f) => `  (${cols.map((k) => sqlLit(f[k])).join(', ')})`).join(',\n'));
       out.write(
         '\nON DUPLICATE KEY UPDATE nombre = VALUES(nombre), primer_nombre = VALUES(primer_nombre), ' +
-          'empresa = VALUES(empresa), correo = VALUES(correo), hoja_origen = VALUES(hoja_origen), ' +
+          'empresa = VALUES(empresa), ciudad = VALUES(ciudad), correo = VALUES(correo), hoja_origen = VALUES(hoja_origen), ' +
           'seminarios_previos = VALUES(seminarios_previos);\n\n'
       );
     }
@@ -213,11 +242,15 @@ async function main() {
   console.log(`  · con primer nombre : ${filas.filter((f) => f.primer_nombre).length}`);
   console.log(`  · con empresa       : ${filas.filter((f) => f.empresa).length}`);
   console.log(`  · con seminarios    : ${filas.filter((f) => f.seminarios_previos).length}`);
+  const porCiudad = new Map();
+  for (const f of filas) porCiudad.set(f.ciudad || 'Sin ciudad', (porCiudad.get(f.ciudad || 'Sin ciudad') || 0) + 1);
+  console.log('  · por ciudad        : ' + [...porCiudad].sort((a, b) => b[1] - a[1]).map(([k, n]) => `${k} ${n}`).join(' · '));
   console.log(`Omitidos (EXCLUIR_CELULARES): ${omitidosExcluidos}`);
-  if (!dry && !modoSql) console.log(`Insertados: ${insertados} · actualizados: ${actualizados} · errores: ${errores.length}`);
+  if (!dry && !modoSql && !modoCiudades) console.log(`Insertados: ${insertados} · actualizados: ${actualizados} · errores: ${errores.length}`);
   errores.slice(0, 20).forEach((e) => console.log('  -', e));
   if (dry) console.log('\n(--dry: no se escribió nada)');
-  if (modoSql) console.log(`\nSQL escrito en: ${sqlSalida}  (${filas.length} filas)`);
+  if (modoCiudades) console.log(`\nSQL de ciudades escrito en: ${ciudadesSalida}  (${filas.filter((f) => f.ciudad).length} contactos con ciudad)`);
+  else if (modoSql) console.log(`\nSQL escrito en: ${sqlSalida}  (${filas.length} filas)`);
 }
 
 main().catch((err) => {

@@ -8,6 +8,7 @@
  *   GET  /r/:token   -> registra el clic en "Quiero participar" y redirige
  *   GET  /           -> panel público (agregados, sin datos personales)
  *   GET  /respuestas, /analisis -> vistas internas (con login)
+ *   GET  /envios     -> envío por lotes y pruebas (con login)
  */
 
 require('dotenv').config();
@@ -21,6 +22,7 @@ const respuestas = require('./respuestas');
 const analisis = require('./analisis');
 const auth = require('./auth');
 const seg = require('./seguridad');
+const lotes = require('./lotes');
 const { decidir, respuestaFinal } = require('./conversacion');
 
 const PORT = Number(process.env.PORT || 3000);
@@ -171,6 +173,8 @@ app.get('/api/config', (_req, res) => {
       telefono: process.env.OP_TELEFONO || '',
       nit: process.env.OP_NIT || '',
     },
+    // Costo aproximado de una plantilla de marketing entregada en Colombia (para estimar lotes).
+    costoMensajeUsd: Number(process.env.COSTO_MENSAJE_USD) || 0.0125,
   });
 });
 
@@ -193,6 +197,79 @@ app.get('/api/respuestas.xlsx', auth.requiereAuth, async (req, res) => {
     seg.fallo(res, 'respuestas.xlsx', err, { json: false });
   }
 });
+
+// ─── Vista interna: envíos por lotes y pruebas ──────────────
+app.get('/envios', (_req, res) => res.sendFile(path.join(PUBLIC_DIR, 'envios.html')));
+
+// Las acciones que cambian datos exigen JSON: un formulario de otro sitio no puede
+// enviarlo sin pasar por CORS (complementa la cookie SameSite=Lax).
+function soloJson(req, res, next) {
+  if (req.is('application/json')) return next();
+  res.status(415).json({ error: 'Se requiere JSON' });
+}
+
+function errorLote(res, etiqueta, err) {
+  if (err instanceof lotes.ErrorUsuario) return res.status(400).json({ error: err.message });
+  seg.fallo(res, etiqueta, err);
+}
+
+app.get('/api/lotes/opciones', auth.requiereAuth, async (req, res) => {
+  try {
+    res.json(await lotes.opciones(req.query.campana));
+  } catch (err) {
+    errorLote(res, 'lotes/opciones', err);
+  }
+});
+
+app.post('/api/lotes/previsualizar', auth.requiereAuth, soloJson, async (req, res) => {
+  try {
+    res.json(await lotes.previsualizar(req.body?.campana, req.body?.filtros));
+  } catch (err) {
+    errorLote(res, 'lotes/previsualizar', err);
+  }
+});
+
+app.get('/api/lotes', auth.requiereAuth, async (_req, res) => {
+  try {
+    res.json(await lotes.listar());
+  } catch (err) {
+    errorLote(res, 'lotes', err);
+  }
+});
+
+app.post('/api/lotes', auth.requiereAuth, soloJson, async (req, res) => {
+  try {
+    res.json(await lotes.crear(req.body || {}, auth.sesionActual(req)?.usuario));
+  } catch (err) {
+    errorLote(res, 'lotes/crear', err);
+  }
+});
+
+app.post('/api/lotes/:id/:accion', auth.requiereAuth, soloJson, async (req, res) => {
+  try {
+    if (!/^\d+$/.test(req.params.id)) return res.status(404).json({ error: 'No encontrado' });
+    res.json(await lotes.accion(Number(req.params.id), req.params.accion));
+  } catch (err) {
+    errorLote(res, 'lotes/accion', err);
+  }
+});
+
+// Envío de prueba de la plantilla (máx. 5 números por solicitud, 10 solicitudes cada 10 min).
+app.post(
+  '/api/prueba',
+  auth.requiereAuth,
+  soloJson,
+  seg.limitador({ ventanaMs: 10 * 60 * 1000, max: 10, mensaje: 'Demasiadas pruebas seguidas. Espere unos minutos.' }),
+  async (req, res) => {
+    try {
+      const r = await lotes.prueba(req.body || {});
+      console.log(`[prueba] ${auth.sesionActual(req)?.usuario}: ${r.resultados.map((x) => `${x.numero} ${x.ok ? 'OK' : 'ERROR'}`).join(', ')}`);
+      res.json(r);
+    } catch (err) {
+      errorLote(res, 'prueba', err);
+    }
+  }
+);
 
 // ─── Verificación del webhook (Meta) ─────────────────────────
 app.get('/webhook', (req, res) => {
@@ -377,6 +454,8 @@ app.listen(PORT, () => {
   db.ping()
     .then((ok) => console.log(ok ? '[db] conexión OK' : '[db] conexión con problemas'))
     .catch((e) => console.warn('[db] no se pudo conectar:', e.message));
+  // Retoma los lotes en curso (también después de un reinicio).
+  lotes.iniciarTrabajador();
 });
 
 module.exports = { app };

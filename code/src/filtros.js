@@ -8,7 +8,9 @@
  *   estado      estado del contacto, uno o varios separados por coma
  *   respuesta   interesados | mas_info | participar | opt_out | texto | sin_respuesta
  *   entrega     no_enviado | enviado | entregado | leido | fallido | sin_whatsapp
- *   hoja        hoja de origen del Excel
+ *   hoja        hoja de origen del Excel ("PRUEBA" muestra los números de prueba, ocultos por defecto)
+ *   ciudad      ciudad / región deducida ("Sin ciudad" = sin dato)
+ *   empresa     empresa exacta
  *   seminario   texto contenido en los seminarios previos
  *   q           busca en nombre, celular, empresa y correo
  *   desde/hasta YYYY-MM-DD sobre campoFecha: envio (def.) | respuesta
@@ -74,6 +76,19 @@ function filtro(f = {}, campanaId) {
   if (f.hoja) {
     where.push('FIND_IN_SET(?, REPLACE(COALESCE(k.hoja_origen, \'\'), \'; \', \',\')) > 0');
     params.push(String(f.hoja));
+  }
+  // Los números de prueba solo aparecen si se pide explícitamente la base PRUEBA.
+  if (f.hoja !== 'PRUEBA') where.push("COALESCE(k.hoja_origen, '') <> 'PRUEBA'");
+  if (f.ciudad) {
+    if (f.ciudad === 'Sin ciudad') where.push('k.ciudad IS NULL');
+    else {
+      where.push('k.ciudad = ?');
+      params.push(String(f.ciudad));
+    }
+  }
+  if (f.empresa) {
+    where.push('k.empresa = ?');
+    params.push(String(f.empresa));
   }
   if (f.seminario) {
     where.push('k.seminarios_previos LIKE ?');

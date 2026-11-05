@@ -75,12 +75,13 @@ const tokenAleatorio = () => crypto.randomBytes(9).toString('base64url'); // 12 
  */
 async function upsertContacto(c) {
   const [res] = await pool.execute(
-    `INSERT INTO contactos (celular, nombre, primer_nombre, empresa, correo, hoja_origen, seminarios_previos)
-     VALUES (?, ?, ?, ?, ?, ?, ?)
+    `INSERT INTO contactos (celular, nombre, primer_nombre, empresa, ciudad, correo, hoja_origen, seminarios_previos)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
      ON DUPLICATE KEY UPDATE
        nombre = VALUES(nombre), primer_nombre = VALUES(primer_nombre), empresa = VALUES(empresa),
-       correo = VALUES(correo), hoja_origen = VALUES(hoja_origen), seminarios_previos = VALUES(seminarios_previos)`,
-    [c.celular, c.nombre, c.primer_nombre, c.empresa, c.correo, c.hoja_origen, c.seminarios_previos]
+       ciudad = VALUES(ciudad), correo = VALUES(correo), hoja_origen = VALUES(hoja_origen),
+       seminarios_previos = VALUES(seminarios_previos)`,
+    [c.celular, c.nombre, c.primer_nombre, c.empresa, c.ciudad ?? null, c.correo, c.hoja_origen, c.seminarios_previos]
   );
   return res.affectedRows === 1 ? 'insertado' : 'actualizado';
 }
@@ -132,6 +133,7 @@ async function contactosParaEnvio(campanaId, limite = 1000) {
     `SELECT c.* FROM contactos c
      LEFT JOIN envios e ON e.contacto_id = c.id AND e.campana_id = ?
      WHERE e.id IS NULL AND c.opt_out = 0 AND c.estado <> 'sin_whatsapp'
+       AND COALESCE(c.hoja_origen, '') <> 'PRUEBA'
      ORDER BY c.id
      LIMIT ${enteroPositivo(limite, 1000)}`,
     [campanaId]
@@ -147,6 +149,7 @@ async function contactosParaReintento(campanaId, horas = 48, maxIntentos = 2, li
     `SELECT c.*, e.id AS envio_id, e.intentos FROM contactos c
      JOIN envios e ON e.contacto_id = c.id AND e.campana_id = ?
      WHERE c.opt_out = 0 AND c.estado <> 'sin_whatsapp'
+       AND COALESCE(c.hoja_origen, '') <> 'PRUEBA'
        AND e.respondido_en IS NULL AND e.estado_envio <> 'fallido'
        AND e.intentos < ${enteroPositivo(maxIntentos, 2)}
        AND e.enviado_en < (UTC_TIMESTAMP() - INTERVAL ${enteroPositivo(horas, 48)} HOUR)

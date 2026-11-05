@@ -90,7 +90,8 @@ async function main() {
       errores.push(`${c.celular}: ${err.message}`);
       console.warn(`  ✗ ${etq} → ${err.message}`);
       // 131049/131048: Meta frena marketing por calidad/límite -> detener la tanda.
-      if (/\(code 13104[89]\)|\(code 4\)|\(code 80007\)/.test(err.message)) {
+      // (131049 es por destinatario: no detiene la tanda.)
+      if ([131048, 4, 80007].includes(err.code)) {
         console.warn('  Meta está limitando los envíos. Se detiene la tanda; reintente mañana.');
         break;
       }

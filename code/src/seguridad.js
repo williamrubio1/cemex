@@ -17,7 +17,7 @@ const CDN = 'https://cdnjs.cloudflare.com';
 /** Hash sha256 de cada <script> en línea de las páginas, para permitirlos en la CSP sin 'unsafe-inline'. */
 function hashesScriptsEnLinea() {
   const hashes = new Set();
-  for (const archivo of ['index.html', 'analisis.html', 'respuestas.html']) {
+  for (const archivo of ['index.html', 'analisis.html', 'respuestas.html', 'envios.html']) {
     let html = '';
     try {
       // El navegador normaliza CRLF -> LF antes de calcular el hash: hacer lo mismo.

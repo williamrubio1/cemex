@@ -10,7 +10,7 @@ const ExcelJS = require('exceljs');
 const db = require('./db');
 const { filtro, campanaDe } = require('./filtros');
 
-const CAMPOS = `k.id, k.celular, k.nombre, k.empresa, k.correo, k.hoja_origen, k.seminarios_previos,
+const CAMPOS = `k.id, k.celular, k.nombre, k.empresa, k.ciudad, k.correo, k.hoja_origen, k.seminarios_previos,
   k.estado, k.opt_out, k.ultima_interaccion,
   e.estado_envio, e.intentos, e.enviado_en, e.entregado_en, e.leido_en, e.error_code, e.error_texto,
   e.respuesta, e.respondido_en, e.clic_en`;
@@ -74,6 +74,7 @@ async function aExcel(filas) {
     { header: 'Nombre', key: 'nombre', width: 30 },
     { header: 'Celular', key: 'celular', width: 16 },
     { header: 'Empresa', key: 'empresa', width: 32 },
+    { header: 'Ciudad', key: 'ciudad', width: 20 },
     { header: 'Correo', key: 'correo', width: 30 },
     { header: 'Respuesta', key: 'respuesta', width: 22 },
     { header: 'Clic en "Quiero participar"', key: 'clic_en', width: 22 },
@@ -87,13 +88,14 @@ async function aExcel(filas) {
     { header: 'Seminarios previos', key: 'seminarios_previos', width: 60 },
   ];
   ws.getRow(1).font = { bold: true };
-  ws.autoFilter = { from: 'A1', to: 'N1' };
+  ws.autoFilter = { from: 'A1', to: 'O1' };
 
   for (const f of filas) {
     ws.addRow({
       nombre: f.nombre || '',
       celular: f.celular,
       empresa: f.empresa || '',
+      ciudad: f.ciudad || 'Sin ciudad',
       correo: f.correo || '',
       respuesta: RESPUESTA_ETIQ[f.respuesta] || (f.estado_envio ? 'Sin respuesta' : 'No enviado'),
       clic_en: fecha(f.clic_en),

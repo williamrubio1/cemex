@@ -11,21 +11,26 @@ const db = require('./db');
 const q = async (sql, params = []) => (await db.pool.query(sql, params))[0];
 const TZ = "'+00:00', '-05:00'"; // UTC -> hora de Colombia
 
+// Los números de prueba (hoja_origen = 'PRUEBA') no cuentan en ningún KPI.
+const NO_PRUEBA = "COALESCE(k.hoja_origen, '') <> 'PRUEBA'";
+
 async function resumen(campanaId) {
   const c = Number.isInteger(campanaId) ? campanaId : null;
-  const ew = c ? 'WHERE e.campana_id = ?' : '';
-  const ewAnd = c ? 'AND e.campana_id = ?' : '';
+  // FROM de envíos reales (sin pruebas), opcionalmente de una campaña.
+  const EV = `FROM envios e JOIN contactos k ON k.id = e.contacto_id WHERE ${NO_PRUEBA}${c ? ' AND e.campana_id = ?' : ''}`;
   const p = c ? [c] : [];
   // Mensajes entrantes de la campaña: de sus destinatarios, desde su primer envío.
-  const mw = c
-    ? `AND celular IN (SELECT celular FROM envios WHERE campana_id = ?)
+  const mw =
+    (c
+      ? `AND celular IN (SELECT celular FROM envios WHERE campana_id = ?)
        AND created_at >= (SELECT MIN(enviado_en) FROM envios WHERE campana_id = ?)`
-    : `AND created_at >= (SELECT COALESCE(MIN(enviado_en), '1970-01-01') FROM envios)`;
+      : `AND created_at >= (SELECT COALESCE(MIN(enviado_en), '1970-01-01') FROM envios)`) +
+    ` AND celular NOT IN (SELECT celular FROM contactos WHERE hoja_origen = 'PRUEBA')`;
   const mp = c ? [c, c] : [];
 
   const [base] = await q(
     `SELECT COUNT(*) AS total, SUM(opt_out = 1) AS opt_out_total,
-            SUM(estado = 'sin_whatsapp') AS sin_whatsapp_total FROM contactos`
+            SUM(estado = 'sin_whatsapp') AS sin_whatsapp_total FROM contactos k WHERE ${NO_PRUEBA}`
   );
 
   const [kpis] = await q(
@@ -43,19 +48,19 @@ async function resumen(campanaId) {
        SUM(clic_en IS NOT NULL)                                   AS clics,
        SUM(respuesta = 'opt_out')                                 AS opt_out,
        SUM(respuesta = 'texto')                                   AS texto
-     FROM envios e ${ew}`,
+     ${EV}`,
     p
   );
 
   const enviosDiario = await q(
     `SELECT DATE(CONVERT_TZ(enviado_en, ${TZ})) AS dia, COUNT(*) AS c
-     FROM envios e WHERE enviado_en IS NOT NULL ${ewAnd}
+     ${EV} AND enviado_en IS NOT NULL
      GROUP BY dia ORDER BY dia LIMIT 120`,
     p
   );
   const respuestasDiario = await q(
     `SELECT DATE(CONVERT_TZ(COALESCE(respondido_en, clic_en), ${TZ})) AS dia, COUNT(*) AS c
-     FROM envios e WHERE COALESCE(respondido_en, clic_en) IS NOT NULL ${ewAnd}
+     ${EV} AND COALESCE(respondido_en, clic_en) IS NOT NULL
      GROUP BY dia ORDER BY dia LIMIT 120`,
     p
   );
@@ -80,7 +85,7 @@ async function resumen(campanaId) {
             DATE_FORMAT(CONVERT_TZ(MIN(enviado_en), ${TZ}), '%H:%i')          AS horaTxt,
             DATE_FORMAT(CONVERT_TZ(MIN(enviado_en), ${TZ}), '%Y-%m-%d %H:00') AS bucket,
             COUNT(*) AS n
-     FROM envios e WHERE enviado_en IS NOT NULL ${ewAnd}
+     ${EV} AND enviado_en IS NOT NULL
      GROUP BY DATE(CONVERT_TZ(enviado_en, ${TZ}))
      ORDER BY MIN(enviado_en)`,
     p
@@ -93,7 +98,7 @@ async function resumen(campanaId) {
             SUM(e.entregado_en IS NOT NULL)                             AS entregados,
             SUM(e.respuesta IN ('mas_info','participar') OR e.clic_en IS NOT NULL) AS interesados,
             SUM(e.respuesta = 'opt_out')                                AS opt_out
-     FROM envios e JOIN contactos k ON k.id = e.contacto_id ${ew}
+     ${EV}
      GROUP BY hoja ORDER BY enviados DESC`,
     p
   );
