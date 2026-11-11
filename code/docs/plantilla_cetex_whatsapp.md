@@ -39,7 +39,7 @@ www.cetex.com.co
 
 | Texto | Qué hace el bot |
 |---|---|
-| `Quiero participar` | empieza el cuestionario (preguntas A–D y datos) |
+| `Quiero participar` | valor + IVA y formas de pago (página, Wompi, transferencia) + botón *Enviar comprobante* |
 | `Más información` | envía el PDF de cada capacitación + [Quiero participar] (formas de pago) [Hablar con asesor] |
 | `No deseo recibir mensajes` | opt-out en todas las campañas |
 

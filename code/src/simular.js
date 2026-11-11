@@ -39,11 +39,11 @@ function mostrar(a) {
 
 /** Corre una conversación y devuelve el registro final (para las comprobaciones). */
 const TODAS = []; // todas las acciones de todas las conversaciones (para revisar límites de WhatsApp)
-function correr(nombre, pasos, contactoInicial = BASE, { silencioso = false, campana = CAMPANA, origen = null } = {}) {
+function correr(nombre, pasos, contactoInicial = BASE, { silencioso = false, campana = CAMPANA, origen = null, registro: inicial = null } = {}) {
   const log = (s) => !silencioso && console.log(s);
   log(`\n═══════════ ${nombre} ═══════════`);
   let c = contactoInicial && { ...contactoInicial };
-  let registro = null;
+  let registro = inicial && { ...inicial };
   let respuesta = null;
   let ultimas = [];
   for (const entrada of pasos) {
@@ -64,8 +64,20 @@ function correr(nombre, pasos, contactoInicial = BASE, { silencioso = false, cam
 const silencioso = process.argv.includes('--silencioso');
 const res = {};
 
-res.completo = correr('Flujo completo (datos de la base: confirma nombre, corrige correo)', [
+// El cuestionario ya no se inicia ("Quiero participar" va al pago); estos casos parten de un
+// registro que lo empezó antes (paso = interes) y verifican que puede terminarlo.
+const EN_CURSO = { paso: 'interes' };
+const enCurso = { silencioso, registro: EN_CURSO };
+
+res.participar = correr('Plantilla: Quiero participar -> formas de pago (sin cuestionario)', [plantilla('Quiero participar')], BASE, { silencioso });
+res.bienvenida = correr('Desconocido: bienvenida y Quiero participar', [txt('Hola, quiero información'), boton('participar', 'Quiero participar')],
+  { id: 8, nombre: null, primer_nombre: null, estado: 'contactado', opt_out: 0 }, { silencioso });
+res.sale = correr('A mitad del cuestionario toca Quiero participar: sale al pago y conserva lo respondido', [
   plantilla('Quiero participar'),
+  txt('gracias'),
+], BASE, { silencioso, registro: { paso: 'nombre', interes: 'cierre', modalidad: 'individual', situacion: 'no', momento: 'ahora', pendiente: JSON.stringify({ campo: 'nombre', tipo: 'base', valor: 'William Rubio' }) } });
+
+res.completo = correr('Cuestionario en curso: completo (datos de la base: confirma nombre, corrige correo)', [
   lista('a_cierre', 'Cierre Contable y Fiscal'),
   boton('b_empresa', 'Para una empresa'),
   boton('c_si', 'Sí'),
@@ -76,11 +88,9 @@ res.completo = correr('Flujo completo (datos de la base: confirma nombre, corrig
   boton('conf_no'), // empresa: cambiarla
   txt('SOLUCTIA S.A.S.'),
   txt('contador publico'),
-], BASE, { silencioso });
+], BASE, enCurso);
 
-res.escrito = correr('Contacto nuevo que responde escribiendo', [
-  txt('Hola, quiero información'),
-  boton('participar'),
+res.escrito = correr('Cuestionario en curso, responde escribiendo', [
   txt('las dos'),
   txt('individual'),
   txt('soy independiente'),
@@ -91,15 +101,13 @@ res.escrito = correr('Contacto nuevo que responde escribiendo', [
   boton('conf_no'), // "No, está bien así": deja hotmial
   txt('medellin, antioquia'),
   txt('aux. contable'),
-], { id: 9, nombre: null, primer_nombre: null, estado: 'contactado', opt_out: 0 }, { silencioso });
+], { id: 9, nombre: null, primer_nombre: null, estado: 'contactado', opt_out: 0 }, enCurso);
 
-res.info = correr('Más información y luego baja a mitad del cuestionario', [
-  plantilla('Más información'),
-  boton('participar'),
+res.info = correr('Cuestionario en curso: "no" en A, Más información y luego baja', [
   txt('no'), // en la pregunta A: no es una baja
   lista('a_info'),
   txt('salir'),
-], BASE, { silencioso });
+], BASE, enCurso);
 
 res.pagar = correr('Más información y luego Quiero participar (formas de pago, sin cuestionario)', [
   plantilla('Más información'),
@@ -109,10 +117,8 @@ res.pagar = correr('Más información y luego Quiero participar (formas de pago,
 
 res.alta = correr('De baja escribe algo, luego ALTA', [txt('hola'), txt('ALTA')], { ...BASE, opt_out: 1, estado: 'opt_out' }, { silencioso });
 
-res.retoma = correr('Retoma: toca la plantilla a mitad del cuestionario; registro completo y vuelve a escribir', [
-  plantilla('Quiero participar'),
+res.retoma = correr('Cuestionario en curso: empresa "no aplica"; registro completo y vuelve a escribir', [
   lista('a_sagrilaft'),
-  plantilla('Quiero participar'),
   boton('b_individual'),
   boton('c_no'),
   lista('d_empresa'),
@@ -122,7 +128,7 @@ res.retoma = correr('Retoma: toca la plantilla a mitad del cuestionario; registr
   txt('no aplica'), // empresa: d_empresa obliga a preguntarla; "no aplica" la deja vacía
   txt('Gerente'),
   txt('gracias!'),
-], BASE, { silencioso });
+], BASE, enCurso);
 
 // ── Seguimiento (plantillas de Utilidad por segmento) ──
 const SEGUIMIENTO = { id: 4, tipo: 'seguimiento', origen_campana_id: 2, nombre: 'Seguimiento calientes', url_inscripcion: 'https://wa.me/573142511033', detalle: null };
@@ -199,3 +205,15 @@ ok(pg.length && pg.every((x) => /checkout\.wompi\.co\/l\/VPOS_kvde1L/.test(x.cue
   'formas de pago: página de CETEX, datáfono Wompi y transferencia');
 const titulos = TODAS.flatMap((x) => (x.tipo === 'cta_url' ? [x.boton] : x.tipo === 'botones' ? x.botones.map((b) => b.title) : []));
 ok(titulos.every((t) => t.length <= 20), `botones de máx. 20 caracteres (${[...new Set(titulos)].join(' · ')})`);
+
+// ── "Quiero participar" va directo al pago (nov. 2026) ──
+const pp = res.participar;
+ok(pp.registro.paso === 'inicio' && !pp.registro.interes && pp.respuesta === 'participar' && pp.contacto.estado === 'interesado', 'plantilla Quiero participar: sin cuestionario, respuesta participar');
+ok(ctas(pp.ultimas).map((x) => x.boton).join() === 'Inscribirme en línea,Enviar comprobante' && !pp.ultimas.some((x) => x.tipo === 'lista'),
+  'plantilla Quiero participar: formas de pago + comprobante, sin preguntas');
+ok(/190\.000/.test(pp.ultimas[0].cuerpo) && /340\.000/.test(pp.ultimas[0].cuerpo) && /wompi/.test(pp.ultimas[0].cuerpo), 'sin capacitación elegida: los dos valores y Wompi');
+ok(ctas(res.bienvenida.ultimas).length === 2 && res.bienvenida.registro.paso === 'inicio', 'desconocido: bienvenida -> Quiero participar -> formas de pago');
+const sa = res.sale;
+ok(sa.registro.paso === 'inicio' && sa.registro.pendiente === null && sa.registro.interes === 'cierre' && sa.registro.momento === 'ahora',
+  'a mitad del cuestionario: sale (paso inicio) y conserva lo respondido');
+ok(sa.ultimas.length === 1 && sa.ultimas[0].tipo === 'botones' && !/nombre/i.test(sa.ultimas[0].cuerpo), 'después de salir, "gracias" no se toma como nombre');

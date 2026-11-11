@@ -78,14 +78,23 @@ Plantilla `cetex_capacitaciones_2026` (ver `docs/plantilla_cetex_whatsapp.md`) c
 respuestas rápidas: *Quiero participar* · *Más información* · *No deseo recibir mensajes*.
 
 ```
-Quiero participar →
+Quiero participar  → valor + IVA y formas de pago [Inscribirme en línea] + comprobante [Enviar comprobante]
+Más información    → PDF de cada capacitación → [Quiero participar] (lo mismo de arriba) [Hablar con asesor]
+No deseo recibir…  → baja
+```
+
+La plantilla va a personas interesadas: desde nov. 2026 *Quiero participar* lleva directo
+al pago y **el cuestionario ya no se inicia**. Se conserva para los registros que lo
+empezaron antes (pueden terminarlo; si tocan *Quiero participar* salen al pago y se guarda
+lo que respondieron) y como base de la segmentación de los seguimientos:
+
+```
 A ¿Cuál capacitación te interesa?  (lista)    Cierre Contable · SAGRILAFT y PTEE · Ambas · Más información
 B ¿Cómo deseas participar?          (botones)  Individual · Para una empresa · Varias personas
 C ¿Trabajas en una empresa?         (botones)  Sí · No · Soy independiente
 D ¿Cuándo inscribirte?              (lista)    Inscribirme ahora · Necesito más info · Opciones para empresa
 Datos: nombre · correo · ciudad · empresa (si trabaja en una o se inscribe por empresa) · cargo
-→ individual:  valor + medios de pago [Inscribirme en línea] y envío del comprobante [Enviar comprobante]
-               (si en D pidió más información, antes recibe la ficha y el PDF)
+→ individual:  formas de pago + comprobante (si en D pidió más información, antes el PDF)
 → corporativo: valor por participante + datos para la cotización [Hablar con asesor]
 ```
 
@@ -108,7 +117,6 @@ Datos: nombre · correo · ciudad · empresa (si trabaja en una o se inscribe po
   nombre de perfil de WhatsApp) y recibe la bienvenida con los 3 botones.
 - *Más información* envía solo el PDF de cada capacitación (ya trae fechas, temario,
   conferencistas, valor y pago) y después [Quiero participar] [Hablar con asesor].
-  Ese *Quiero participar* muestra las formas de pago sin pasar por el cuestionario.
 - Los PDF (`public/docs/`) se suben a Meta una vez y se reutiliza su id (Meta lo guarda
   30 días; se vuelve a subir a los 20). El bot espera el acuse de entrega de cada PDF
   antes del mensaje siguiente (máx. `ESPERA_DOCUMENTO_MS`, 20 s), para que no lleguen

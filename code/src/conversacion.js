@@ -5,12 +5,14 @@
  * y clasificación del contacto. Función pura: no toca BD ni WhatsApp.
  *
  *   Plantilla (marketing) con 3 botones de respuesta rápida:
- *     Quiero participar          -> empieza el cuestionario
+ *     Quiero participar          -> formas de pago (valor + IVA, página, Wompi, transferencia) + comprobante
  *     Más información            -> PDF de cada capacitación + [Quiero participar] [Hablar con asesor]
- *                                   (ese "Quiero participar" muestra las formas de pago, sin cuestionario)
  *     No deseo recibir mensajes  -> opt-out en todas las campañas
  *
- *   Cuestionario (tabla `registros`, una fila por contacto y campaña; `paso` = pregunta pendiente):
+ *   Cuestionario (desde nov. 2026 ya no se inicia: la plantilla va a personas interesadas y
+ *   "Quiero participar" lleva directo al pago). Se conserva para los registros que lo
+ *   empezaron antes y para la segmentación de los seguimientos.
+ *   (tabla `registros`, una fila por contacto y campaña; `paso` = pregunta pendiente):
  *     interes   A ¿Cuál capacitación te interesa?   cierre | sagrilaft | ambas | info
  *     modalidad B ¿Cómo deseas participar?          individual | empresa | varias
  *     situacion C ¿Trabajas en una empresa?          si | no | independiente
@@ -413,7 +415,7 @@ function decidir({ contacto, campana, registro, origen = null, entrada, url, enl
   if (!contacto) {
     if (intencion === 'opt_out') return fin();
     if (intencion === 'mas_info') infoCursos(O.cursosDe(null), PIE_INFO, BOTONES_INFO);
-    else if (intencion === 'pagar') pasosPago(O.cursosDe(null), '¡Perfecto! 🙌 Así te inscribes:');
+    else if (intencion === 'pagar' || intencion === 'participar') pasosPago(O.cursosDe(null), '¡Perfecto! 🙌 Así te inscribes:');
     else if (intencion === 'hablar') asesor();
     else cta(`${bienvenida('')}\n\nToca el botón para hablar con un asesor e inscribirte.`);
     return fin();
@@ -484,14 +486,20 @@ function decidir({ contacto, campana, registro, origen = null, entrada, url, enl
     return fin();
   }
 
-  // ── Botones después de la información (PDF): formas de pago o asesor, sin cuestionario ──
-  // No cambian el paso del cuestionario: si estaba a mitad, puede seguir después.
-  if (intencion === 'pagar' || intencion === 'hablar') {
+  // ── "Quiero participar" (plantilla, bienvenida o tras el PDF) y "Hablar con asesor" ──
+  // Van directo a las formas de pago o al asesor: el cuestionario ya no se inicia (nov. 2026,
+  // la plantilla va a personas interesadas). Quien estaba a mitad del cuestionario sale de él
+  // (paso -> inicio) y conserva lo que ya respondió.
+  if (intencion === 'participar' || intencion === 'pagar' || intencion === 'hablar') {
     respuesta = 'participar';
     contactoCambios.estado = 'interesado';
-    if (!r) cambios.paso = 'inicio';
-    if (intencion === 'hablar') asesor();
-    else if (r?.paso === 'fin') pago(r, `¡Perfecto${saludo()}! 🙌`);
+    if (intencion === 'hablar') {
+      if (!r) cambios.paso = 'inicio';
+      asesor();
+      return fin();
+    }
+    if (!r || r.paso !== 'fin') Object.assign(cambios, { paso: 'inicio', pendiente: null });
+    if (r?.paso === 'fin') pago(r, `¡Perfecto${saludo()}! 🙌`); // corporativo -> cotización
     else pasosPago(O.cursosDe(r?.interes), `¡Perfecto${saludo()}! 🙌 Así te inscribes:`);
     return fin();
   }
@@ -499,11 +507,6 @@ function decidir({ contacto, campana, registro, origen = null, entrada, url, enl
   // ── Registro completo ──
   if (r && r.paso === 'fin') {
     const ya = `Ya tenemos tus datos${primer() ? ', ' + primer() : ''} ✅.`;
-    if (intencion === 'participar') {
-      // Vuelve a tocar "Quiero participar": se le reenvían los pasos para pagar (o la cotización).
-      pago(r, ya);
-      return fin();
-    }
     if (intencion === 'mas_info') infoCursos(O.cursosDe(r.interes));
     cta(`${ya}\nSi ya pagaste, envía el comprobante a ${CORREO} o por WhatsApp a un asesor de ${MARCA}. Para cualquier duda, escríbele aquí:`);
     return fin();
@@ -511,13 +514,7 @@ function decidir({ contacto, campana, registro, origen = null, entrada, url, enl
 
   // ── Antes del cuestionario ──
   if (!r || r.paso === 'inicio') {
-    if (intencion === 'participar') {
-      respuesta = 'participar';
-      contactoCambios.estado = 'interesado';
-      cambios.paso = 'interes';
-      texto('¡Excelente! 🙌 Te haré 4 preguntas rápidas y luego te pediré unos datos para tu inscripción.');
-      preguntar('interes');
-    } else if (intencion === 'mas_info') {
+    if (intencion === 'mas_info') {
       respuesta = 'mas_info';
       contactoCambios.estado = 'interesado';
       cambios.paso = 'inicio';
@@ -529,8 +526,8 @@ function decidir({ contacto, campana, registro, origen = null, entrada, url, enl
     } else {
       respuesta = 'texto';
       botones(
-        `Gracias por escribirnos. Para inscribirte, toca *Quiero participar*: te haré unas preguntas rápidas ` +
-          'y te enviaré los valores y medios de pago. Para conocer temario, conferencistas y certificación, toca *Más información*.',
+        'Gracias por escribirnos. Para inscribirte, toca *Quiero participar* y te enviamos las formas de pago. ' +
+          'Para conocer fechas, temario y conferencistas, toca *Más información*.',
         [BTN.participar, BTN.mas_info]
       );
     }
@@ -538,12 +535,8 @@ function decidir({ contacto, campana, registro, origen = null, entrada, url, enl
   }
 
   // ── En medio del cuestionario ──
+  // Solo registros que empezaron el cuestionario antes de nov. 2026 ("Quiero participar" ya no lo inicia).
   const paso = r.paso;
-  if (intencion === 'participar') {
-    texto('¡Sigamos con tu inscripción! 👇');
-    preguntar(paso);
-    return fin();
-  }
   if (intencion === 'mas_info') {
     infoCursos(O.cursosDe(r.interes));
     preguntar(paso);
