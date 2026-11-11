@@ -437,7 +437,6 @@ async function procesarMensajeEntrante(msg, nombrePerfil) {
   const enlaces = {
     web: medido ? `${medido}?a=web` : null,
     comprobante: medido ? `${medido}?a=comprobante` : null,
-    docs: PUBLIC_URL ? `${PUBLIC_URL}/docs` : null,
   };
   const plan = decidir({ contacto, campana, registro, origen, entrada, url, enlaces });
 
@@ -450,9 +449,16 @@ async function procesarMensajeEntrante(msg, nombrePerfil) {
     }
   }
 
-  for (const accion of plan.acciones) {
+  for (let i = 0; i < plan.acciones.length; i++) {
+    const accion = plan.acciones[i];
     try {
-      await enviarAccion(celular, accion);
+      const wamid = await enviarAccion(celular, accion);
+      // Un PDF tarda más en llegar que un texto: se espera a que Meta lo entregue
+      // antes del mensaje siguiente, para que no lleguen en desorden.
+      if (accion.tipo === 'documento' && wamid && i < plan.acciones.length - 1) {
+        const estado = await esperarEntrega(wamid);
+        if (estado !== 'delivered' && estado !== 'read') console.log(`[out] ${celular} PDF sin acuse de entrega (${estado}), se continúa`);
+      }
     } catch (err) {
       console.error(`[out] ${celular} error enviando:`, err.message);
       break; // no mandar la pregunta siguiente sin la anterior
@@ -476,16 +482,65 @@ async function enviarAccion(celular, accion) {
   }
   if (accion.tipo === 'botones') return wa.enviarBotones(celular, accion.cuerpo, accion.botones);
   if (accion.tipo === 'lista') return wa.enviarLista(celular, accion.cuerpo, accion.boton, accion.seccion, accion.filas);
-  if (accion.tipo === 'documento') {
-    // Si el PDF falla (p. ej. Meta no pudo descargarlo), la conversación sigue: la ficha va en el texto siguiente.
-    return wa.enviarDocumento(celular, accion.url, accion.archivo, accion.leyenda).catch((err) => {
-      console.warn(`[out] ${celular} no se pudo enviar el PDF:`, err.message);
-    });
-  }
+  if (accion.tipo === 'documento') return enviarPdf(celular, accion);
   console.warn('[out] acción desconocida:', accion.tipo);
 }
 
+/**
+ * PDF de public/docs/: 1) subido a Meta (rápido), 2) por enlace público, 3) la ficha en texto.
+ * Devuelve el wamid del documento, o null si se envió el texto de respaldo.
+ */
+async function enviarPdf(celular, a) {
+  const nombre = path.basename(String(a.pdf || ''));
+  const ruta = path.join(PUBLIC_DIR, 'docs', nombre);
+  try {
+    return await wa.enviarDocumento(celular, { id: await wa.idMedio(ruta) }, a.archivo, a.leyenda);
+  } catch (err) {
+    // Id inválido o vencido en Meta: se vuelve a subir en el próximo envío.
+    if ([100, 131052, 131053].includes(err.code)) wa.olvidarMedio(ruta);
+    console.warn(`[out] ${celular} PDF ${nombre} por id falló:`, err.message);
+  }
+  if (PUBLIC_URL) {
+    try {
+      return await wa.enviarDocumento(celular, { link: `${PUBLIC_URL}/docs/${encodeURIComponent(nombre)}` }, a.archivo, a.leyenda);
+    } catch (err) {
+      console.warn(`[out] ${celular} PDF ${nombre} por enlace falló:`, err.message);
+    }
+  }
+  await wa.enviarTexto(celular, a.respaldo || a.leyenda);
+  return null;
+}
+
+// ─── Espera de entrega (para no adelantar mensajes a un PDF) ─────────
+const ESPERA_PDF_MS = Number(process.env.ESPERA_DOCUMENTO_MS) || 20000;
+const esperando = new Map(); // wamid -> resolver
+const acusesRecientes = new Map(); // wamid -> estado (por si el acuse llega antes de empezar a esperar)
+
+function esperarEntrega(wamid) {
+  if (acusesRecientes.has(wamid)) return Promise.resolve(acusesRecientes.get(wamid));
+  return new Promise((resolve) => {
+    const t = setTimeout(() => {
+      esperando.delete(wamid);
+      resolve('sin acuse');
+    }, ESPERA_PDF_MS);
+    esperando.set(wamid, (estado) => {
+      clearTimeout(t);
+      esperando.delete(wamid);
+      resolve(estado);
+    });
+  });
+}
+
+function avisarAcuse(st) {
+  if (!['delivered', 'read', 'failed'].includes(st.status)) return;
+  const resolver = esperando.get(st.id);
+  if (resolver) return resolver(st.status);
+  acusesRecientes.set(st.id, st.status);
+  if (acusesRecientes.size > 500) acusesRecientes.delete(acusesRecientes.keys().next().value);
+}
+
 async function procesarEstado(st) {
+  avisarAcuse(st);
   await db.registrarMensaje({
     celular: celularDe(st.recipient_id),
     direccion: 'out',

@@ -17,6 +17,7 @@ const CORREO = process.env.CLIENTE_CORREO || 'capacitaciones@cetex.com.co';
 
 const PAGO = {
   web: 'https://cetex.com.co/inscripcion/',
+  wompi: 'https://checkout.wompi.co/l/VPOS_kvde1L', // datáfono virtual (link de pago)
   banco: 'Bancolombia',
   cuenta: 'Cuenta de ahorros 58999443557',
   titular: 'Cetex Asesores S.A.S.',
@@ -70,7 +71,7 @@ const CURSOS = {
 /** Capacitaciones según la respuesta A (cierre | sagrilaft | ambas | info | vacío -> ambas). */
 const cursosDe = (interes) => (CURSOS[interes] ? [CURSOS[interes]] : [CURSOS.cierre, CURSOS.sagrilaft]);
 
-/** Ficha completa de una capacitación (para "Más información" / "Ver información"). */
+/** Ficha completa de una capacitación: solo de respaldo, si el PDF no se puede enviar. */
 const resumen = (c) =>
   [
     `${c.icono} *${c.titulo}*`,
@@ -84,18 +85,16 @@ const resumen = (c) =>
     `💲 ${c.valor}`,
   ].join('\n');
 
-/** Texto que acompaña el PDF. */
-const leyendaPdf = (c) => `📄 ${c.titulo}: temario completo, conferencistas e información general.`;
+/** Texto que acompaña el PDF (el PDF ya trae fechas, temario, conferencistas, valor y pago). */
+const leyendaPdf = (c) => `📄 *${c.titulo}*\nFechas, temario, conferencistas, valor y formas de pago.`;
 
-/** Bloque corto de una capacitación para el mensaje de inscripción. */
-const bloque = (c) =>
-  [`${c.icono} *${c.titulo}*`, `📅 ${c.fechas} · ${c.horario}`, `💻 ${c.modalidad} · ${c.duracion} · certificado digital`, `💲 ${c.valor}`].join('\n');
-
-/** Cómo inscribirse y pagar (va con el botón "Inscribirme en línea"). */
+/** Formas de pago (va con el botón "Inscribirme en línea" = página de inscripción). */
 const inscripcion = (cursos, encabezado) =>
-  `${encabezado}\n\n${cursos.map(bloque).join('\n\n')}\n\n` +
-  '*Opción 1:* inscríbete y paga en línea (todas las tarjetas de crédito, vía Wompi): toca *Inscribirme en línea*.\n\n' +
-  `*Opción 2:* transferencia a ${PAGO.banco}\n${PAGO.cuenta}\nA nombre de ${PAGO.titular}\nNIT ${PAGO.nit}`;
+  `${encabezado}\n\n${cursos.map((c) => `${c.icono} *${c.titulo}*\n💲 ${c.valor}`).join('\n\n')}\n\n` +
+  '*Formas de pago*\n' +
+  '1️⃣ *Página de CETEX:* inscríbete y paga en línea tocando *Inscribirme en línea*.\n' +
+  `2️⃣ *Datáfono virtual Wompi* (todas las tarjetas de crédito):\n${PAGO.wompi}\n` +
+  `3️⃣ *Transferencia a ${PAGO.banco}*\n${PAGO.cuenta}\nA nombre de ${PAGO.titular}\nNIT ${PAGO.nit}`;
 
 /** Envío del comprobante (va con el botón "Enviar comprobante"). */
 const comprobante = () =>

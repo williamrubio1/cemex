@@ -6,7 +6,8 @@
  *
  *   Plantilla (marketing) con 3 botones de respuesta rápida:
  *     Quiero participar          -> empieza el cuestionario
- *     Más información            -> ficha + PDF de cada capacitación + [Quiero participar]
+ *     Más información            -> PDF de cada capacitación + [Quiero participar] [Hablar con asesor]
+ *                                   (ese "Quiero participar" muestra las formas de pago, sin cuestionario)
  *     No deseo recibir mensajes  -> opt-out en todas las campañas
  *
  *   Cuestionario (tabla `registros`, una fila por contacto y campaña; `paso` = pregunta pendiente):
@@ -60,6 +61,9 @@ const BTN = {
   participar: { id: 'participar', title: 'Quiero participar' },
   mas_info: { id: 'mas_info', title: 'Más información' },
   opt_out: { id: 'opt_out', title: 'No deseo mensajes' },
+  // Después de la información (PDF): formas de pago o asesor, sin cuestionario.
+  pagar: { id: 'pagar', title: 'Quiero participar' },
+  hablar: { id: 'hablar', title: 'Hablar con asesor' },
   // Botones con enlace (cta_url, máx. 20 caracteres)
   asesor: 'Hablar con asesor',
   web: 'Inscribirme en línea',
@@ -253,7 +257,9 @@ function botonPlantilla(entrada) {
 function accionSeguimiento(entrada) {
   const t = N.clave(`${entrada.id || ''} ${entrada.payload || ''} ${entrada.titulo || ''} ${entrada.texto || ''}`);
   if (/cotiza/.test(t)) return 'cotizacion';
-  if (/inscrib/.test(t)) return 'inscribirme';
+  // "pagar" = botón "Quiero participar" que va tras la información (solo por id: "no quiero pagar…" es texto).
+  if (entrada.id === 'pagar' || /inscrib/.test(t)) return 'inscribirme';
+  if (entrada.id === 'hablar') return 'asesor';
   if (/asesor/.test(t)) return 'asesor';
   if (/duda|pregunta/.test(t)) return 'duda';
   if (/ver info|informacion|mas info/.test(t)) return 'info';
@@ -285,7 +291,7 @@ const leerPendiente = (p) => {
  * @param {object|null} o.origen   en un seguimiento: registro del cuestionario en la campaña de origen
  * @param {object} o.entrada        { clase: 'boton_plantilla'|'boton'|'lista'|'texto'|'otro', titulo?, payload?, id?, texto? }
  * @param {string} o.url            enlace del botón "Hablar con asesor" (medido vía /r/<token> si hay dominio)
- * @param {object} [o.enlaces]      { web, comprobante } (medidos vía /r/<token>?a=…) y docs (URL pública de los PDF)
+ * @param {object} [o.enlaces]      { web, comprobante } (medidos vía /r/<token>?a=…)
  */
 function decidir({ contacto, campana, registro, origen = null, entrada, url, enlaces = {} }) {
   const acciones = [];
@@ -293,8 +299,9 @@ function decidir({ contacto, campana, registro, origen = null, entrada, url, enl
   const botones = (cuerpo, lista) => acciones.push({ tipo: 'botones', cuerpo, botones: lista });
   const lista = (cuerpo, boton, seccion, filas) => acciones.push({ tipo: 'lista', cuerpo, boton, seccion, filas });
   const cta = (cuerpo, boton = BTN.asesor, destino = url || WA_ASESOR) => acciones.push({ tipo: 'cta_url', cuerpo, boton, url: destino });
+  // PDF de public/docs/; index.js lo envía (subido a Meta o por enlace) y, si falla, manda el respaldo en texto.
   const documento = (c) =>
-    acciones.push({ tipo: 'documento', url: `${enlaces.docs}/${c.pdf}`, archivo: c.archivo, leyenda: O.leyendaPdf(c) });
+    acciones.push({ tipo: 'documento', pdf: c.pdf, archivo: c.archivo, leyenda: O.leyendaPdf(c), respaldo: O.resumen(c) });
 
   const r = registro ? { ...registro, pendiente: leerPendiente(registro.pendiente) } : null;
   const cambios = {};
@@ -305,14 +312,16 @@ function decidir({ contacto, campana, registro, origen = null, entrada, url, enl
   };
 
   // ── Información y pago ──
-  /** Ficha de cada capacitación (antes, su PDF si hay dominio público); la última lleva los botones. */
+  /**
+   * Información de las capacitaciones: solo el PDF de cada una (ya trae todo) y, si se piden,
+   * los botones para seguir. index.js espera a que Meta entregue cada PDF antes del mensaje siguiente.
+   */
   function infoCursos(cursos, pie, lista) {
-    if (enlaces.docs) cursos.forEach(documento);
-    cursos.forEach((c, i) => {
-      if (lista && i === cursos.length - 1) botones(`${O.resumen(c)}\n\n${pie}`, lista);
-      else texto(O.resumen(c));
-    });
+    cursos.forEach(documento);
+    if (lista) botones(pie, lista);
   }
+  const PIE_INFO = '¿Te gustaría inscribirte? Toca *Quiero participar* para ver las formas de pago, o *Hablar con asesor* si tienes alguna duda.';
+  const BOTONES_INFO = [BTN.pagar, BTN.hablar];
 
   /** Valor + medios de pago [Inscribirme en línea] y envío del comprobante [Enviar comprobante]. */
   function pasosPago(cursos, encabezado) {
@@ -397,11 +406,15 @@ function decidir({ contacto, campana, registro, origen = null, entrada, url, enl
   else if (t && RE_ALTA.test(t) && contacto?.opt_out) intencion = 'alta';
   else if (t && (enFlujo ? RE_BAJA_EXPLICITA : RE_BAJA).test(t)) intencion = 'opt_out';
 
+  const saludo = () => (primer() ? `, ${primer()}` : '');
+  const asesor = () => cta(`Con gusto${saludo()}. Un asesor de ${MARCA} te atiende por WhatsApp; escríbele aquí:`);
+
   // Número que no está en la base (y no se pudo registrar): se le atiende sin guardar nada.
-  const PIE_PARTICIPAR = '¿Te gustaría inscribirte? Toca *Quiero participar*.';
   if (!contacto) {
     if (intencion === 'opt_out') return fin();
-    if (intencion === 'mas_info') infoCursos(O.cursosDe(null), PIE_PARTICIPAR, [BTN.participar]);
+    if (intencion === 'mas_info') infoCursos(O.cursosDe(null), PIE_INFO, BOTONES_INFO);
+    else if (intencion === 'pagar') pasosPago(O.cursosDe(null), '¡Perfecto! 🙌 Así te inscribes:');
+    else if (intencion === 'hablar') asesor();
     else cta(`${bienvenida('')}\n\nToca el botón para hablar con un asesor e inscribirte.`);
     return fin();
   }
@@ -441,7 +454,6 @@ function decidir({ contacto, campana, registro, origen = null, entrada, url, enl
   // No hay cuestionario: cada botón responde con la información pedida (de la capacitación
   // que eligió en la campaña de origen) y lleva al pago o al asesor.
   if (campana.tipo === 'seguimiento') {
-    const saludo = primer() ? `, ${primer()}` : '';
     const cursos = O.cursosDe(origen?.interes);
     const accion = accionSeguimiento(entrada);
     const respuestaDe = { inscribirme: 'participar', cotizacion: 'participar', asesor: 'participar', duda: 'mas_info', info: 'mas_info' };
@@ -449,26 +461,38 @@ function decidir({ contacto, campana, registro, origen = null, entrada, url, enl
     if (accion) contactoCambios.estado = 'interesado';
     switch (accion) {
       case 'inscribirme':
-        pasosPago(cursos, `¡Perfecto${saludo}! 🙌 Así te inscribes:`);
+        pasosPago(cursos, `¡Perfecto${saludo()}! 🙌 Así te inscribes:`);
         break;
       case 'cotizacion':
-        cta(O.cotizacion(cursos, `Con gusto${saludo}.`));
+        cta(O.cotizacion(cursos, `Con gusto${saludo()}.`));
         break;
       case 'asesor':
-        cta(`Un asesor de ${MARCA} te atiende por WhatsApp${saludo}. Escríbele aquí:`);
+        asesor();
         break;
       case 'duda':
-        cta(`Con gusto${saludo}. Escríbele tu pregunta a un asesor de ${MARCA} aquí:`);
+        cta(`Con gusto${saludo()}. Escríbele tu pregunta a un asesor de ${MARCA} aquí:`);
         break;
       case 'info':
-        infoCursos(cursos, 'Toca *Inscribirme* para recibir los medios de pago, o *Tengo una duda* para hablar con un asesor.', [
+        infoCursos(cursos, 'Toca *Inscribirme* para ver las formas de pago, o *Tengo una duda* para hablar con un asesor.', [
           { id: 'seg_inscribirme', title: 'Inscribirme' },
           { id: 'seg_duda', title: 'Tengo una duda' },
         ]);
         break;
       default:
-        cta(`Gracias por escribirnos${saludo}. Un asesor de ${MARCA} te responde por WhatsApp; escríbele aquí:`);
+        cta(`Gracias por escribirnos${saludo()}. Un asesor de ${MARCA} te responde por WhatsApp; escríbele aquí:`);
     }
+    return fin();
+  }
+
+  // ── Botones después de la información (PDF): formas de pago o asesor, sin cuestionario ──
+  // No cambian el paso del cuestionario: si estaba a mitad, puede seguir después.
+  if (intencion === 'pagar' || intencion === 'hablar') {
+    respuesta = 'participar';
+    contactoCambios.estado = 'interesado';
+    if (!r) cambios.paso = 'inicio';
+    if (intencion === 'hablar') asesor();
+    else if (r?.paso === 'fin') pago(r, `¡Perfecto${saludo()}! 🙌`);
+    else pasosPago(O.cursosDe(r?.interes), `¡Perfecto${saludo()}! 🙌 Así te inscribes:`);
     return fin();
   }
 
@@ -497,7 +521,7 @@ function decidir({ contacto, campana, registro, origen = null, entrada, url, enl
       respuesta = 'mas_info';
       contactoCambios.estado = 'interesado';
       cambios.paso = 'inicio';
-      infoCursos(O.cursosDe(null), PIE_PARTICIPAR, [BTN.participar]);
+      infoCursos(O.cursosDe(null), PIE_INFO, BOTONES_INFO);
     } else if (!r) {
       respuesta = 'texto';
       cambios.paso = 'inicio';

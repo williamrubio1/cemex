@@ -40,7 +40,7 @@ www.cetex.com.co
 | Texto | Qué hace el bot |
 |---|---|
 | `Quiero participar` | empieza el cuestionario (preguntas A–D y datos) |
-| `Más información` | envía el PDF y la ficha de cada capacitación + botón *Quiero participar* |
+| `Más información` | envía el PDF de cada capacitación + [Quiero participar] (formas de pago) [Hablar con asesor] |
 | `No deseo recibir mensajes` | opt-out en todas las campañas |
 
 Los tres llegan al webhook (a diferencia de un botón de URL), así el bot puede

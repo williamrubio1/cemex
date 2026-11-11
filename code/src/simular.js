@@ -16,7 +16,7 @@ const CAMPANA = {
   detalle: null,
 };
 const URL = 'https://<dominio>/r/abc123';
-const ENLACES = { web: `${URL}?a=web`, comprobante: `${URL}?a=comprobante`, docs: 'https://<dominio>/docs' };
+const ENLACES = { web: `${URL}?a=web`, comprobante: `${URL}?a=comprobante` };
 const BASE = {
   id: 1, nombre: 'WILLIAM RUBIO', primer_nombre: 'WILLIAM', correo: 'wrubio@gmial.com', empresa: 'soluctia sas',
   ciudad: 'Bogotá', estado: 'contactado', opt_out: 0,
@@ -32,7 +32,7 @@ function mostrar(a) {
   if (a.tipo === 'cta_url') return `  BOT: ${a.cuerpo}\n       [ ${a.boton} → ${a.url} ]`;
   if (a.tipo === 'botones') return `  BOT: ${a.cuerpo}\n       ${a.botones.map((b) => `[ ${b.title} ]`).join(' ')}`;
   if (a.tipo === 'lista') return `  BOT: ${a.cuerpo}\n       ≡ ${a.boton}: ${a.filas.map((f) => f.title).join(' | ')}`;
-  if (a.tipo === 'documento') return `  BOT: 📎 ${a.archivo} (${a.url})
+  if (a.tipo === 'documento') return `  BOT: 📎 ${a.archivo} (public/docs/${a.pdf})
        ${a.leyenda}`;
   return `  BOT: (${a.tipo})`;
 }
@@ -99,6 +99,12 @@ res.info = correr('Más información y luego baja a mitad del cuestionario', [
   txt('no'), // en la pregunta A: no es una baja
   lista('a_info'),
   txt('salir'),
+], BASE, { silencioso });
+
+res.pagar = correr('Más información y luego Quiero participar (formas de pago, sin cuestionario)', [
+  plantilla('Más información'),
+  boton('pagar', 'Quiero participar'),
+  boton('hablar', 'Hablar con asesor'),
 ], BASE, { silencioso });
 
 res.alta = correr('De baja escribe algo, luego ALTA', [txt('hola'), txt('ALTA')], { ...BASE, opt_out: 1, estado: 'opt_out' }, { silencioso });
@@ -176,10 +182,20 @@ ok(si.length === 2 && /SAGRILAFT/.test(si[0].cuerpo) && /\$340\.000 \+ IVA/.test
   'seguimiento Inscribirme: valor de la capacitación de origen (SAGRILAFT) y nombre');
 ok(/\$190\.000/.test(ctas(res.segCotizacion.ultimas)[0].cuerpo) && /\$340\.000/.test(ctas(res.segCotizacion.ultimas)[0].cuerpo), 'seguimiento cotización "ambas": los dos valores por participante');
 const vi = res.segVerInfo.ultimas;
-ok(vi[0].tipo === 'documento' && /sagrilaft/.test(vi[0].url) && vi[1].tipo === 'botones' && /Jenith/.test(vi[1].cuerpo), 'seguimiento Ver información: PDF + ficha con botones');
-ok(res.info.registro && TODAS.some((x) => x.tipo === 'documento' && /cierre/.test(x.url)), 'Más información de la plantilla: envía los PDF');
+ok(vi.length === 2 && vi[0].tipo === 'documento' && /sagrilaft/.test(vi[0].pdf) && vi[1].tipo === 'botones' && !/Jenith/.test(vi[1].cuerpo),
+  'seguimiento Ver información: solo el PDF de su capacitación y luego los botones');
+ok(!TODAS.some((x) => x.tipo !== 'documento' && /🎤/.test(cuerpo(x))), 'la ficha en texto no se envía junto al PDF (solo es respaldo)');
+ok(TODAS.filter((x) => x.tipo === 'documento').every((x) => x.respaldo && /🎤/.test(x.respaldo)), 'cada PDF lleva la ficha de respaldo por si falla');
+// "Más información" -> PDFs -> [Quiero participar] [Hablar con asesor] -> formas de pago, sin cuestionario
+const P = res.pagar;
+ok(P.registro && P.registro.paso === 'inicio' && !P.registro.interes && P.respuesta === 'participar', 'Quiero participar tras la información: no inicia el cuestionario');
+ok(TODAS.some((x) => x.tipo === 'botones' && x.botones.map((b) => b.id).join() === 'pagar,hablar'), 'tras los PDF: botones [Quiero participar] [Hablar con asesor]');
+
 ok(!TODAS.some((x) => /226\.100|404\.600/.test(cuerpo(x))), 'nunca se muestra el total con IVA');
 const largo = TODAS.filter((x) => cuerpo(x).length > 1024);
 ok(!largo.length, `ningún mensaje supera 1024 caracteres (máx. ${Math.max(...TODAS.map((x) => cuerpo(x).length))})`);
+const pg = ctas(TODAS).filter((x) => x.boton === 'Inscribirme en línea');
+ok(pg.length && pg.every((x) => /checkout\.wompi\.co\/l\/VPOS_kvde1L/.test(x.cuerpo) && /58999443557/.test(x.cuerpo) && /Inscribirme en línea/.test(x.cuerpo)),
+  'formas de pago: página de CETEX, datáfono Wompi y transferencia');
 const titulos = TODAS.flatMap((x) => (x.tipo === 'cta_url' ? [x.boton] : x.tipo === 'botones' ? x.botones.map((b) => b.title) : []));
 ok(titulos.every((t) => t.length <= 20), `botones de máx. 20 caracteres (${[...new Set(titulos)].join(' · ')})`);

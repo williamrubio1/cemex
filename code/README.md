@@ -106,9 +106,14 @@ Datos: nombre · correo · ciudad · empresa (si trabaja en una o se inscribe po
 - Baja en cualquier momento ("salir", "no deseo recibir mensajes"); **ALTA** reactiva.
 - Quien escribe sin estar en la base se crea como contacto `ENTRANTE` (con su
   nombre de perfil de WhatsApp) y recibe la bienvenida con los 3 botones.
-- *Más información* envía el PDF de cada capacitación (desde `public/docs/`, si hay
-  `PUBLIC_URL`) y su ficha: fechas, modalidad, conferencistas, público, temas, qué
-  incluye y valor. Si el PDF falla, la conversación sigue con la ficha.
+- *Más información* envía solo el PDF de cada capacitación (ya trae fechas, temario,
+  conferencistas, valor y pago) y después [Quiero participar] [Hablar con asesor].
+  Ese *Quiero participar* muestra las formas de pago sin pasar por el cuestionario.
+- Los PDF (`public/docs/`) se suben a Meta una vez y se reutiliza su id (Meta lo guarda
+  30 días; se vuelve a subir a los 20). El bot espera el acuse de entrega de cada PDF
+  antes del mensaje siguiente (máx. `ESPERA_DOCUMENTO_MS`, 20 s), para que no lleguen
+  en desorden. Si la subida falla, se envía por enlace (`/docs`, con `PUBLIC_URL`) y,
+  si también falla, la ficha en texto.
 
 `npm run simular` recorre los casos y verifica el resultado.
 
@@ -120,7 +125,8 @@ Datos: nombre · correo · ciudad · empresa (si trabaja en una o se inscribe po
 | Taller práctico SAGRILAFT y PTEE | 5 y 12 dic (sábados) · 7 a. m.–1 p. m. · virtual · 12 h | $340.000 + IVA |
 
 - El valor se muestra siempre "+ IVA" (CETEX no muestra el total). Sin descuentos por grupo.
-- Pago: en línea en cetex.com.co/inscripcion (tarjetas vía Wompi) o transferencia a
+- Formas de pago: 1) página de CETEX cetex.com.co/inscripcion (botón *Inscribirme en
+  línea*), 2) datáfono virtual Wompi checkout.wompi.co/l/VPOS_kvde1L, 3) transferencia a
   Bancolombia, cuenta de ahorros 58999443557, Cetex Asesores S.A.S., NIT 900.626.419-4.
 - Comprobante: a capacitaciones@cetex.com.co o por WhatsApp al 314 251 1033. Con el
   pago confirmado, CETEX envía usuario y contraseña.
@@ -148,7 +154,7 @@ plantilla de **Utilidad** a quienes ya conversaron con el bot en la campaña de 
 - Las respuestas usan la capacitación que la persona eligió en la campaña de origen:
   - *Inscribirme* → valor + medios de pago [Inscribirme en línea] y [Enviar comprobante].
   - *Recibir cotización* → valor por participante + datos para la cotización [Hablar con asesor].
-  - *Ver información* → PDF + ficha + [Inscribirme] [Tengo una duda].
+  - *Ver información* → PDF de su capacitación + [Inscribirme] [Tengo una duda].
   - *Hablar con asesor* / *Tengo una duda* → [Hablar con asesor].
 - El enlace al asesor (`/r/<token>`) mide el clic y abre el WhatsApp de ventas con un
   mensaje que ya dice el nombre, la empresa y la capacitación de la persona.

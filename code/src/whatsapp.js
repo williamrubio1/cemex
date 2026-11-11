@@ -11,6 +11,8 @@
  */
 
 require('dotenv').config();
+const fs = require('fs/promises');
+const path = require('path');
 const db = require('./db');
 
 const GRAPH_VERSION = process.env.GRAPH_VERSION || 'v26.0';
@@ -233,16 +235,52 @@ async function enviarCtaUrl(to, cuerpo, textoBoton, url) {
   return data.messages?.[0]?.id || null;
 }
 
+// ─── Medios subidos a Meta ──────────────────────────────────
+// Un PDF enviado por enlace obliga a Meta a descargarlo en cada envío (lento: el mensaje
+// siguiente llega antes). Subido una vez, se reutiliza su id: Meta lo guarda 30 días.
+const VIDA_MEDIO_MS = 20 * 24 * 60 * 60 * 1000;
+const medios = new Map(); // ruta local -> { t, promesa: Promise<id> }
+
+/** id de Meta de un archivo local (lo sube la primera vez o si el id está por vencer). */
+function idMedio(ruta, tipo = 'application/pdf') {
+  const m = medios.get(ruta);
+  if (m && Date.now() - m.t < VIDA_MEDIO_MS) return m.promesa;
+  const promesa = (async () => {
+    if (!WHATSAPP_TOKEN || !PHONE_NUMBER_ID) throw new Error('Faltan WHATSAPP_TOKEN o PHONE_NUMBER_ID en el .env');
+    const buf = await fs.readFile(ruta);
+    const form = new FormData();
+    form.append('messaging_product', 'whatsapp');
+    form.append('type', tipo);
+    form.append('file', new Blob([buf], { type: tipo }), path.basename(ruta));
+    const res = await fetch(`${API_BASE}/${GRAPH_VERSION}/${PHONE_NUMBER_ID}/media`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${WHATSAPP_TOKEN}` },
+      body: form,
+      signal: AbortSignal.timeout(90000),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.id) throw new Error(`subida a Meta ${res.status}: ${data.error?.message || 'sin id'}`);
+    console.log(`[whatsapp] ${path.basename(ruta)} subido a Meta (id ${data.id})`);
+    return data.id;
+  })();
+  medios.set(ruta, { t: Date.now(), promesa });
+  promesa.catch(() => medios.delete(ruta)); // si falla, se reintenta en el próximo envío
+  return promesa;
+}
+
+/** Olvida el id de un archivo (p. ej. si Meta lo rechaza por vencido). */
+const olvidarMedio = (ruta) => medios.delete(ruta);
+
 /**
- * Documento (PDF) por enlace público (solo dentro de la ventana de 24 h).
- * Meta descarga el archivo de `url` (y lo guarda en caché unos minutos).
+ * Documento (PDF), solo dentro de la ventana de 24 h.
  * @param {string} to
- * @param {string} url       enlace https al archivo
+ * @param {{id?:string, link?:string}} medio  id de un medio subido a Meta, o enlace https público
  * @param {string} archivo   nombre con el que lo ve la persona
  * @param {string} [leyenda] texto bajo el documento (máx. 1024)
  */
-async function enviarDocumento(to, url, archivo, leyenda) {
-  const document = { link: String(url), filename: recortar(archivo, 240) };
+async function enviarDocumento(to, medio, archivo, leyenda) {
+  const document = medio.id ? { id: String(medio.id) } : { link: String(medio.link) };
+  document.filename = recortar(archivo, 240);
   if (leyenda) document.caption = recortar(leyenda, 1024);
   const payload = { messaging_product: 'whatsapp', to: soloDigitos(to), type: 'document', document };
   const data = await llamarAPI(payload);
@@ -259,4 +297,6 @@ module.exports = {
   enviarLista,
   enviarCtaUrl,
   enviarDocumento,
+  idMedio,
+  olvidarMedio,
 };
