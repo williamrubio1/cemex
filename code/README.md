@@ -19,7 +19,9 @@ src/
   index.js         # Express: webhook, /r/:token, paneles y APIs
   conversacion.js  # bienvenida, cuestionario A–D, captura de datos y clasificación (función pura)
   normalizar.js    # limpia y valida nombre, correo, ciudad, empresa y cargo
-  whatsapp.js      # plantilla, texto, botones, botón con enlace (cta_url)
+  oferta.js        # capacitaciones (fechas, temario, valor + IVA), medios de pago y sus textos
+  variables.js     # valores de las variables de cada plantilla y enlaces personalizados al asesor
+  whatsapp.js      # plantilla, texto, botones, botón con enlace (cta_url), documento (PDF)
   db.js            # MySQL: contactos, campañas, envíos, log
   telefonos.js     # normalización/extracción de celulares
   filtros.js       # filtros comunes de /respuestas y /analisis
@@ -30,6 +32,7 @@ src/
   import.js        # importa el Excel de contactos (varias hojas)
   simular.js       # simula la conversación sin BD ni WhatsApp
 public/            # index.html (público), respuestas.html y analisis.html (con login)
+public/docs/       # brochures en PDF que el bot envía por WhatsApp (servidos en /docs)
 db/schema.sql      # tablas (aditivo e idempotente) + campañas
 db/00X_*.sql       # migraciones para una base ya creada (correr una vez en phpMyAdmin)
 docs/plantilla_cetex_whatsapp.md
@@ -43,6 +46,7 @@ docs/plantilla_cetex_whatsapp.md
 | `campanas` | una por seminario: plantilla, fechas, horario, enlace de inscripción |
 | `envios` | contacto × campaña: enviado / entregado / leído / fallido, respuesta, clic |
 | `registros` | contacto × campaña: respuestas del cuestionario, datos normalizados, clasificación |
+| `campanas.tipo` | `invitacion` (plantilla + cuestionario) o `seguimiento` (plantilla de Utilidad a un segmento de `origen_campana_id`) |
 | `lotes`, `lote_contactos` | envíos masivos lanzados desde `/envios` |
 | `mensajes` | log de todo lo que entra y sale |
 | `eventos_procesados` | idempotencia del webhook |
@@ -80,7 +84,9 @@ B ¿Cómo deseas participar?          (botones)  Individual · Para una empresa 
 C ¿Trabajas en una empresa?         (botones)  Sí · No · Soy independiente
 D ¿Cuándo inscribirte?              (lista)    Inscribirme ahora · Necesito más info · Opciones para empresa
 Datos: nombre · correo · ciudad · empresa (si trabaja en una o se inscribe por empresa) · cargo
-→ mensaje final + botón "Hablar con asesor" (wa.me/573142511033, medido vía /r/<token>)
+→ individual:  valor + medios de pago [Inscribirme en línea] y envío del comprobante [Enviar comprobante]
+               (si en D pidió más información, antes recibe la ficha y el PDF)
+→ corporativo: valor por participante + datos para la cotización [Hablar con asesor]
 ```
 
 - Cada respuesta se guarda al momento en `registros` (`paso` = pregunta pendiente):
@@ -100,9 +106,54 @@ Datos: nombre · correo · ciudad · empresa (si trabaja en una o se inscribe po
 - Baja en cualquier momento ("salir", "no deseo recibir mensajes"); **ALTA** reactiva.
 - Quien escribe sin estar en la base se crea como contacto `ENTRANTE` (con su
   nombre de perfil de WhatsApp) y recibe la bienvenida con los 3 botones.
-- El texto de *Más información* es `campanas.detalle`; si está vacío se usa uno genérico.
+- *Más información* envía el PDF de cada capacitación (desde `public/docs/`, si hay
+  `PUBLIC_URL`) y su ficha: fechas, modalidad, conferencistas, público, temas, qué
+  incluye y valor. Si el PDF falla, la conversación sigue con la ficha.
 
 `npm run simular` recorre los casos y verifica el resultado.
+
+### Valores y medios de pago (`src/oferta.js`)
+
+| Capacitación | Fechas | Valor |
+|---|---|---|
+| Seminario Cierre Contable y Fiscal con IA y sin IA | 23, 25 y 26 nov · 5–9 p. m. · virtual · 12 h | $190.000 + IVA |
+| Taller práctico SAGRILAFT y PTEE | 5 y 12 dic (sábados) · 7 a. m.–1 p. m. · virtual · 12 h | $340.000 + IVA |
+
+- El valor se muestra siempre "+ IVA" (CETEX no muestra el total). Sin descuentos por grupo.
+- Pago: en línea en cetex.com.co/inscripcion (tarjetas vía Wompi) o transferencia a
+  Bancolombia, cuenta de ahorros 58999443557, Cetex Asesores S.A.S., NIT 900.626.419-4.
+- Comprobante: a capacitaciones@cetex.com.co o por WhatsApp al 314 251 1033. Con el
+  pago confirmado, CETEX envía usuario y contraseña.
+- Para una nueva edición: actualizar `src/oferta.js` y los PDF de `public/docs/`.
+  `campanas.detalle` ya no se usa.
+- Enlaces medidos (registran el clic en el envío): `/r/<token>` → asesor,
+  `/r/<token>?a=web` → página de inscripción, `/r/<token>?a=comprobante` → WhatsApp de
+  ventas con "Soy …, te envío el comprobante de pago de …".
+
+## Seguimiento por segmento
+
+Campañas `tipo = 'seguimiento'` (migración `db/004_seguimiento.sql`): cada una envía una
+plantilla de **Utilidad** a quienes ya conversaron con el bot en la campaña de origen.
+
+| Campaña | Plantilla | Segmento sugerido en `/envios` |
+|---|---|---|
+| `seguimiento-corporativos-2026` | `cetex_solicitud_corporativa` | Corporativos: solo corporativos |
+| `seguimiento-calientes-2026` | `cetex_solicitud_inscripcion` | 🔥 Calientes, sin corporativos |
+| `seguimiento-interesados-2026` | `cetex_informacion_solicitada` | 🟡 Interesados, sin corporativos |
+
+- En `/envios`, al elegir una campaña de seguimiento aparecen los filtros de
+  **clasificación**, **corporativos** y **avance** (A, D, completo, sin terminar).
+- Variables por campaña (`campanas.variables`, ej. `nombre,capacitacion`):
+  `{{capacitacion}}` se llena con lo que eligió cada persona en la pregunta A.
+- Las respuestas usan la capacitación que la persona eligió en la campaña de origen:
+  - *Inscribirme* → valor + medios de pago [Inscribirme en línea] y [Enviar comprobante].
+  - *Recibir cotización* → valor por participante + datos para la cotización [Hablar con asesor].
+  - *Ver información* → PDF + ficha + [Inscribirme] [Tengo una duda].
+  - *Hablar con asesor* / *Tengo una duda* → [Hablar con asesor].
+- El enlace al asesor (`/r/<token>`) mide el clic y abre el WhatsApp de ventas con un
+  mensaje que ya dice el nombre, la empresa y la capacitación de la persona.
+- Los envíos y respuestas de cada seguimiento se ven aparte en Respuestas y Análisis
+  (con la clasificación de origen); el registro del cuestionario no se modifica.
 
 ## Envío masivo
 

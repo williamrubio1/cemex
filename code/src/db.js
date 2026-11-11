@@ -112,12 +112,22 @@ async function getCampana(codigoOId) {
 
 /** La campaña activa más reciente (la que atiende respuestas de desconocidos). */
 async function campanaActiva() {
-  const rows = await query('SELECT * FROM campanas WHERE activa = 1 ORDER BY id DESC LIMIT 1');
-  return rows[0] || null;
+  // Las de seguimiento nunca atienden a desconocidos (aunque alguien las marque activas).
+  const rows = await query('SELECT * FROM campanas WHERE activa = 1 ORDER BY id DESC');
+  return rows.find((c) => (c.tipo || 'invitacion') !== 'seguimiento') || null;
 }
 
 async function listarCampanas() {
-  return query('SELECT id, codigo, nombre, activa FROM campanas ORDER BY id DESC');
+  // SELECT * para no fallar si la migración 004 (tipo, origen) aún no se ha corrido.
+  const rows = await query('SELECT * FROM campanas ORDER BY id DESC');
+  return rows.map((c) => ({
+    id: c.id,
+    codigo: c.codigo,
+    nombre: c.nombre,
+    activa: c.activa,
+    tipo: c.tipo || 'invitacion',
+    origen_campana_id: c.origen_campana_id || null,
+  }));
 }
 
 // ─── Envíos ─────────────────────────────────────────────────

@@ -40,7 +40,7 @@ www.cetex.com.co
 | Texto | Qué hace el bot |
 |---|---|
 | `Quiero participar` | empieza el cuestionario (preguntas A–D y datos) |
-| `Más información` | envía el detalle de las capacitaciones + botón *Quiero participar* |
+| `Más información` | envía el PDF y la ficha de cada capacitación + botón *Quiero participar* |
 | `No deseo recibir mensajes` | opt-out en todas las campañas |
 
 Los tres llegan al webhook (a diferencia de un botón de URL), así el bot puede
@@ -59,3 +59,45 @@ mensaje final, medido vía `/r/<token>` cuando hay `PUBLIC_URL`.
 Un solo seminario, botón de URL "Quiero participar" hacia `wa.me/573142511033`
 y dos respuestas rápidas. Se aprobó sin variables (se escribió `{{1}}` y Meta
 lo rechazó como variable), por eso para ella va `TEMPLATE_PARAM_NAME=-`.
+
+## Seguimiento por segmento (categoría **Utilidad**)
+
+Se envían desde `/envios` eligiendo la campaña de seguimiento correspondiente.
+Variables con nombre: `{{nombre}}` (ejemplo `William`) y `{{capacitacion}}`
+(ejemplo `el Seminario de Cierre Contable y Fiscal`). Sin precios ni lenguaje
+promocional: los valores, los medios de pago y el PDF van en la respuesta del bot
+(`src/oferta.js`), que es gratis dentro de la ventana de 24 h. No hace falta editar
+estas plantillas cuando cambian valores o fechas.
+
+### `cetex_solicitud_corporativa` (campaña `seguimiento-corporativos-2026`)
+
+Encabezado: `Solicitud de inscripción empresarial`
+
+```
+Hola, {{nombre}}. Te escribimos de CETEX sobre la solicitud de inscripción empresarial que registraste en nuestro chat para {{capacitacion}}.
+
+Para preparar la cotización de tu empresa necesitamos confirmar el número de participantes y los datos de facturación. Elige una opción para continuar.
+```
+Botones: `Recibir cotización` · `Hablar con asesor` · `No deseo recibir mensajes`
+
+### `cetex_solicitud_inscripcion` (campaña `seguimiento-calientes-2026`)
+
+Encabezado: `Tu solicitud de inscripción`
+
+```
+Hola, {{nombre}}. Te escribimos de CETEX sobre la solicitud de inscripción que registraste en nuestro chat para {{capacitacion}}.
+
+Ya tenemos los valores, los medios de pago y los pasos para completar tu inscripción. Toca *Inscribirme* para recibirlos aquí mismo.
+```
+Botones: `Inscribirme` · `Tengo una duda` · `No deseo recibir mensajes`
+
+### `cetex_informacion_solicitada` (campaña `seguimiento-interesados-2026`)
+
+Encabezado: `Información que solicitaste`
+
+```
+Hola, {{nombre}}. Como lo solicitaste en nuestro chat, te compartimos la información sobre {{capacitacion}}: contenidos, certificación, valores y proceso de inscripción.
+
+Toca *Ver información* para recibirla aquí mismo.
+```
+Botones: `Ver información` · `Inscribirme` · `No deseo recibir mensajes`

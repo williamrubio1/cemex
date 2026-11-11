@@ -73,10 +73,22 @@ async function registrarSalida(to, tipo, contenido, data) {
   }
 }
 
-/** Componentes de la plantilla: {{1}} = primer nombre y, si aplica, el token del enlace. */
-function componentesPlantilla(nombre, urlToken) {
+/**
+ * Componentes de la plantilla.
+ * - `parametros` ([{ nombre, valor }], de campanas.variables): variables con nombre, en orden.
+ * - Sin `parametros` (modo anterior): una variable = primer nombre, según TEMPLATE_PARAM_NAME.
+ * - Si aplica, el token del botón de URL dinámica.
+ */
+function componentesPlantilla(nombre, urlToken, parametros) {
   const comps = [];
-  if (TEMPLATE_PARAM_NAME !== '-') {
+  if (Array.isArray(parametros)) {
+    if (parametros.length) {
+      comps.push({
+        type: 'body',
+        parameters: parametros.map((p) => ({ type: 'text', parameter_name: p.nombre, text: String(p.valor) })),
+      });
+    }
+  } else if (TEMPLATE_PARAM_NAME !== '-') {
     const p = { type: 'text', text: String(nombre || NOMBRE_DEFECTO) };
     if (TEMPLATE_PARAM_NAME) p.parameter_name = TEMPLATE_PARAM_NAME; // variable con nombre
     comps.push({ type: 'body', parameters: [p] });
@@ -95,7 +107,7 @@ function componentesPlantilla(nombre, urlToken) {
 /**
  * Plantilla de la campaña (único mensaje que se puede enviar fuera de la ventana de 24 h).
  * @param {string} to
- * @param {{plantilla:string, idioma?:string, nombre?:string, urlToken?:string}} o
+ * @param {{plantilla:string, idioma?:string, nombre?:string, urlToken?:string, parametros?:{nombre:string,valor:string}[]|null}} o
  */
 async function enviarPlantilla(to, o) {
   const payload = {
@@ -105,7 +117,7 @@ async function enviarPlantilla(to, o) {
     template: {
       name: o.plantilla || process.env.TEMPLATE_NAME,
       language: { code: o.idioma || process.env.TEMPLATE_LANG || 'es_CO' },
-      components: componentesPlantilla(o.nombre, o.urlToken),
+      components: componentesPlantilla(o.nombre, o.urlToken, o.parametros),
     },
   };
   const data = await llamarAPI(payload);
@@ -221,6 +233,23 @@ async function enviarCtaUrl(to, cuerpo, textoBoton, url) {
   return data.messages?.[0]?.id || null;
 }
 
+/**
+ * Documento (PDF) por enlace público (solo dentro de la ventana de 24 h).
+ * Meta descarga el archivo de `url` (y lo guarda en caché unos minutos).
+ * @param {string} to
+ * @param {string} url       enlace https al archivo
+ * @param {string} archivo   nombre con el que lo ve la persona
+ * @param {string} [leyenda] texto bajo el documento (máx. 1024)
+ */
+async function enviarDocumento(to, url, archivo, leyenda) {
+  const document = { link: String(url), filename: recortar(archivo, 240) };
+  if (leyenda) document.caption = recortar(leyenda, 1024);
+  const payload = { messaging_product: 'whatsapp', to: soloDigitos(to), type: 'document', document };
+  const data = await llamarAPI(payload);
+  await registrarSalida(to, 'document', payload.document, data);
+  return data.messages?.[0]?.id || null;
+}
+
 module.exports = {
   BASE_URL,
   llamarAPI,
@@ -229,4 +258,5 @@ module.exports = {
   enviarBotones,
   enviarLista,
   enviarCtaUrl,
+  enviarDocumento,
 };

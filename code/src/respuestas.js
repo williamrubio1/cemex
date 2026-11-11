@@ -59,7 +59,7 @@ const entero = (v, def, max) => {
 
 async function listar(opts = {}) {
   const campana = await campanaDe(db, opts);
-  const { join, cond, params } = filtro(opts, campana.id);
+  const { join, cond, params } = filtro(opts, campana);
   const pagina = entero(opts.pagina, 1);
   const porPagina = entero(opts.porPagina, 50, 200);
   const offset = (pagina - 1) * porPagina;
@@ -75,7 +75,7 @@ async function listar(opts = {}) {
 /** Todas las filas que cumplen el filtro (tope 10.000), para el Excel. */
 async function todas(opts = {}) {
   const campana = await campanaDe(db, opts);
-  const { join, cond, params } = filtro(opts, campana.id);
+  const { join, cond, params } = filtro(opts, campana);
   const [filas] = await db.pool.query(`SELECT ${CAMPOS} ${join} ${cond} ${ORDEN} LIMIT 10000`, params);
   return filas;
 }

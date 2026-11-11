@@ -16,7 +16,7 @@ const INTERESADO = "(e.respuesta IN ('mas_info','participar') OR e.clic_en IS NO
 
 async function resumen(f = {}) {
   const campana = await campanaDe(db, f);
-  const { join, cond, params } = filtro(f, campana.id);
+  const { join, cond, params } = filtro(f, campana);
 
   const [k] = await q(
     `SELECT

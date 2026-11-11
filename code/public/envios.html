@@ -64,6 +64,9 @@
   .checks .n { color:var(--muted); font-size:11.5px; }
   .opts label { display:flex; align-items:center; gap:7px; font-size:13px; margin:4px 0; cursor:pointer; }
   .opts input { accent-color:var(--accent); }
+  .segmento { border:1px solid var(--accent); border-radius:10px; padding:12px 14px; margin:0 0 16px;
+    background:color-mix(in srgb, var(--accent) 6%, transparent); }
+  .segmento .fila select { min-width:180px; }
   .chips { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
   .chip { font-size:12px; border-radius:20px; padding:3px 10px; background:var(--track); border:none; box-shadow:none; }
   .resumen { background:var(--bg); border:1px solid var(--border); border-radius:10px; padding:14px; }
@@ -196,6 +199,29 @@
         <h2>2 · ¿A quién se envía?</h2>
         <p class="ayuda" style="margin:-6px 0 14px">Solo se incluyen contactos que aún no recibieron esta campaña, no pidieron baja y no
           están marcados sin WhatsApp. <span id="f-disp"></span></p>
+        <div class="segmento" id="f-seg" hidden>
+          <span class="etq">Segmento del cuestionario · <span id="f-seg-origen"></span></span>
+          <p class="ayuda" style="margin:2px 0 10px">Campaña de seguimiento: solo contactos que conversaron con el bot en la campaña de origen.</p>
+          <div class="campo"><span class="etq">Clasificación</span><div class="checks" id="f-clasif"></div></div>
+          <div class="fila">
+            <label class="ayuda" style="margin:0">Corporativos
+              <select id="f-corp">
+                <option value="">Todos</option>
+                <option value="si">Solo corporativos</option>
+                <option value="no">Sin corporativos</option>
+              </select>
+            </label>
+            <label class="ayuda" style="margin:0">Avance
+              <select id="f-avance">
+                <option value="">Cualquier avance</option>
+                <option value="con_a">Eligieron capacitación (A)</option>
+                <option value="con_d">Dijeron cuándo inscribirse (D)</option>
+                <option value="completos">Registro completo</option>
+                <option value="sin_terminar">Registro sin terminar</option>
+              </select>
+            </label>
+          </div>
+        </div>
         <div class="grid2">
           <div>
             <div class="campo"><span class="etq">Base de origen</span><div class="checks" id="f-hojas"></div></div>
@@ -284,7 +310,12 @@
   const fmt = (n) => Number(n || 0).toLocaleString('es-CO');
   const ESTADO = { en_curso: 'Enviando', esperando_cupo: 'Esperando cupo', pausado: 'Pausado', completado: 'Completado', cancelado: 'Cancelado' };
   const ABIERTOS = ['en_curso', 'esperando_cupo', 'pausado'];
-  let costo = 0.0125;
+  let costo = 0.0125;          // plantilla de marketing (invitación)
+  let costoUtilidad = 0.0008;  // plantilla de utilidad (seguimiento)
+  let campanas = [];
+  const ETQ_CLASIF = { caliente: '🔥 Calientes', interesado: '🟡 Interesados', potencial: '🔵 Potenciales' };
+  const esSeguimiento = () => opciones && opciones.campana && opciones.campana.tipo === 'seguimiento';
+  const costoActual = () => (esSeguimiento() ? costoUtilidad : costo);
   let opciones = null;
   let empresasSel = [];
   let desfase = 0; // reloj del servidor - reloj local
@@ -314,7 +345,11 @@
 
   // ── Sesión ──
   async function init() {
-    try { const c = await (await fetch('/api/config')).json(); costo = Number(c.costoMensajeUsd) || costo; } catch {}
+    try {
+      const c = await (await fetch('/api/config')).json();
+      costo = Number(c.costoMensajeUsd) || costo;
+      costoUtilidad = Number(c.costoUtilidadUsd) || costoUtilidad;
+    } catch {}
     try {
       const s = await (await fetch('/api/session')).json();
       if (s.autenticado) { $('quien').textContent = s.usuario; arrancar(); } else mostrar('login');
@@ -339,8 +374,13 @@
     mostrar('app');
     if (!arrancado) {
       arrancado = true;
-      const lista = await api('/api/campanas');
-      $('campana').innerHTML = lista.map((c) => `<option value="${c.id}">${esc(c.nombre)}</option>`).join('');
+      campanas = await api('/api/campanas');
+      // Invitaciones primero; los seguimientos agrupados aparte.
+      const grupo = (tipo, etq) => {
+        const l = campanas.filter((c) => (c.tipo || 'invitacion') === tipo);
+        return l.length ? `<optgroup label="${etq}">${l.map((c) => `<option value="${c.id}">${esc(c.nombre)}</option>`).join('')}</optgroup>` : '';
+      };
+      $('campana').innerHTML = grupo('invitacion', 'Invitación (Marketing)') + grupo('seguimiento', 'Seguimiento (Utilidad)');
       $('campana').addEventListener('change', () => { empresasSel = []; cargarOpciones(); });
       setInterval(() => { if (!document.hidden) cargarLotes(); }, 3000);
       setInterval(() => { if (!document.hidden && ultimoLotes) pintarActivo(ultimoLotes); }, 1000);
@@ -362,6 +402,7 @@
       checks('f-ciudades', opciones.ciudades);
       $('dl-empresas').innerHTML = opciones.empresas.map((e) => `<option value="${esc(e.k)}">${fmt(e.n)} contacto(s)</option>`).join('');
       $('f-disp').textContent = `Disponibles en esta campaña: ${fmt(opciones.disponibles)}.`;
+      pintarSegmento(opciones.segmento);
       pintarEmpresas();
       previsualizar();
     } catch (e) {
@@ -369,6 +410,23 @@
     }
   }
   const marcados = (cont) => [...$(cont).querySelectorAll('input:checked')].map((i) => i.value);
+
+  // Segmento del cuestionario (solo campañas de seguimiento).
+  function pintarSegmento(seg) {
+    const o = opciones && opciones.campana;
+    $('f-seg').hidden = !seg;
+    if (!seg) { $('f-clasif').innerHTML = ''; $('f-corp').value = ''; $('f-avance').value = ''; return; }
+    $('f-seg-origen').textContent = o.origen ? o.origen.nombre : '';
+    const previos = marcados('f-clasif');
+    $('f-clasif').innerHTML = seg.clasificaciones.map((c) => {
+      const on = previos.includes(c.k);
+      return `<label class="${on ? 'on' : ''}"><input type="checkbox" value="${c.k}" ${on ? 'checked' : ''} /> ${ETQ_CLASIF[c.k] || esc(c.k)} <span class="n">${fmt(c.n)}</span></label>`;
+    }).join('');
+    const a = seg.avance;
+    const txt = { con_a: 'Eligieron capacitación (A)', con_d: 'Dijeron cuándo inscribirse (D)', completos: 'Registro completo', sin_terminar: 'Registro sin terminar' };
+    for (const op of $('f-avance').options) if (op.value) op.textContent = `${txt[op.value]} · ${fmt(a[op.value])}`;
+    $('f-corp').options[1].textContent = `Solo corporativos · ${fmt(seg.corporativos)}`;
+  }
 
   function pintarEmpresas() {
     $('f-empresas-chips').innerHTML = empresasSel.map((e, i) =>
@@ -393,6 +451,7 @@
       empresaContiene: $('f-contiene').value.trim(), seminario: $('f-seminario').value.trim(),
       soloNuevos: $('f-nuevos').checked, conNombre: $('f-connombre').checked, conCorreo: $('f-concorreo').checked,
       cantidad: $('f-cantidad').value, orden: $('f-orden').value,
+      clasificaciones: marcados('f-clasif'), corporativo: $('f-corp').value, avance: $('f-avance').value,
     };
   }
 
@@ -413,7 +472,8 @@
       const sel = d.seleccionados;
       $('r-sel').textContent = fmt(sel);
       $('r-sub').textContent = `contactos se enviarán · ${fmt(d.coinciden)} cumplen los filtros · ${fmt(d.nEmpresas)} empresas`;
-      $('r-costo').textContent = `≈ USD ${(sel * costo).toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (solo se cobran los entregados)`;
+      $('r-costo').textContent = `≈ USD ${(sel * costoActual()).toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` +
+        ` (${esSeguimiento() ? 'utilidad' : 'marketing'}; solo se cobran los entregados)`;
       const mps = Math.max(0.5, Number($('f-mps').value) || 5);
       const tope = Number($('f-tope').value) || 0;
       const usados = opciones ? opciones.usados24h : 0;
@@ -440,7 +500,7 @@
   $('l-lanzar').addEventListener('click', async () => {
     $('l-err').innerHTML = '';
     const sel = $('r-sel').textContent;
-    if (!confirm(`¿Lanzar el lote a ${sel} contactos?\n\nCosto estimado: ${$('r-costo').textContent}\nLos mensajes de marketing no se pueden deshacer una vez enviados.`)) return;
+    if (!confirm(`¿Lanzar el lote a ${sel} contactos?\n\nCampaña: ${$('campana').selectedOptions[0]?.textContent || ''}\nCosto estimado: ${$('r-costo').textContent}\nLos mensajes no se pueden deshacer una vez enviados.`)) return;
     const b = $('l-lanzar'); b.disabled = true; b.textContent = 'Creando lote…';
     try {
       await api('/api/lotes', {
@@ -461,7 +521,7 @@
     try {
       const d = await api('/api/prueba', { campana: $('campana').value, numeros: $('t-numeros').value, nombre: $('t-nombre').value });
       $('t-res').innerHTML = d.resultados.map((r) => r.ok
-        ? `<div class="res-ok">✓ ${esc(r.numero)} · enviado (saludo: “Hola ${esc(r.saludo)}”)</div>`
+        ? `<div class="res-ok">✓ ${esc(r.numero)} · enviado (${r.variables ? esc(r.variables) : `saludo: “Hola ${esc(r.saludo)}”`})</div>`
         : `<div class="res-err">✗ ${esc(r.numero)} · ${esc(r.error)}</div>`).join('') +
         `<p class="ayuda">Plantilla <b>${esc(d.plantilla)}</b>. Las respuestas se ven en <a class="lnk" href="/respuestas?hoja=PRUEBA">Respuestas → base PRUEBA</a>.</p>`;
     } catch (e) {

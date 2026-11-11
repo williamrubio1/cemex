@@ -23,9 +23,16 @@ const JOIN =
   'FROM contactos k LEFT JOIN envios e ON e.contacto_id = k.id AND e.campana_id = ? ' +
   'LEFT JOIN registros r ON r.contacto_id = k.id AND r.campana_id = ?';
 
-function filtro(f = {}, campanaId) {
+/**
+ * @param {object} f        filtros de la URL
+ * @param {object} campana  fila de `campanas`. En una campaña de seguimiento el cuestionario (r)
+ *                          es el de la campaña de origen y solo se listan contactos con registro.
+ */
+function filtro(f = {}, campana) {
   const where = [];
-  const params = [campanaId, campanaId]; // para los dos JOIN
+  const origen = campana.origen_campana_id || null;
+  const params = [campana.id, origen || campana.id]; // para los dos JOIN
+  if (origen) where.push('r.id IS NOT NULL');
 
   // Cuestionario del chat: clasificación del registro o registros completos.
   switch (f.clasificacion) {

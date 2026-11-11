@@ -18,6 +18,7 @@ const crypto = require('crypto');
 const db = require('./db');
 const wa = require('./whatsapp');
 const { extraerCelulares, celularesExcluidos } = require('./telefonos');
+const { parametrosPlantilla } = require('./variables');
 
 const q = async (sql, p = []) => (await db.pool.query(sql, p))[0];
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -52,8 +53,21 @@ function normalizarFiltros(f = {}) {
     conCorreo: bool(f.conCorreo),
     cantidad: Number.isFinite(cantidad) && cantidad > 0 ? Math.min(cantidad, 100000) : null,
     orden: ['base', 'aleatorio', 'empresa', 'ciudad'].includes(f.orden) ? f.orden : 'base',
+    // Segmento del cuestionario (solo campañas de seguimiento: registros de la campaña de origen).
+    clasificaciones: lista(f.clasificaciones).filter((c) => CLASIFICACIONES.includes(c)),
+    corporativo: ['si', 'no'].includes(f.corporativo) ? f.corporativo : '',
+    avance: Object.keys(AVANCE_SQL).includes(f.avance) ? f.avance : '',
   };
 }
+
+const CLASIFICACIONES = ['caliente', 'interesado', 'potencial'];
+// Avance en el cuestionario de la campaña de origen (alias ro = registros de origen).
+const AVANCE_SQL = {
+  con_a: 'ro.interes IS NOT NULL',
+  con_d: 'ro.momento IS NOT NULL',
+  completos: 'ro.completado_en IS NOT NULL',
+  sin_terminar: "ro.completado_en IS NULL AND ro.paso <> 'inicio'",
+};
 
 const ORDEN_SQL = {
   base: 'k.id',
@@ -66,8 +80,11 @@ const ORDEN_SQL = {
  * FROM + WHERE de los contactos que pueden entrar a un lote de la campaña:
  * no han recibido la campaña, no pidieron baja, tienen WhatsApp, no son de prueba,
  * no están excluidos, no están ya pendientes en otro lote abierto y no tienen registro en la campaña.
+ * En una campaña de seguimiento, además, deben tener registro en la campaña de origen (alias ro).
  */
-function candidatos(campanaId, f) {
+function candidatos(campana, f) {
+  const campanaId = campana.id;
+  const origen = campana.origen_campana_id || null;
   const where = [
     'e.id IS NULL',
     'k.opt_out = 0',
@@ -79,7 +96,7 @@ function candidatos(campanaId, f) {
     // Ya conversó con el bot en esta campaña (p. ej. escribió por su cuenta): no se le envía la plantilla.
     'NOT EXISTS (SELECT 1 FROM registros r WHERE r.contacto_id = k.id AND r.campana_id = ?)',
   ];
-  const params = [campanaId, campanaId, campanaId]; // JOIN + NOT EXISTS (lotes) + NOT EXISTS (registros)
+  const params = [campanaId, ...(origen ? [origen] : []), campanaId, campanaId]; // JOIN(s) + NOT EXISTS x2
 
   const excl = [...celularesExcluidos()];
   if (excl.length) {
@@ -118,10 +135,37 @@ function candidatos(campanaId, f) {
     if (f.soloNuevos) where.push("k.estado = 'no_contactado'");
     if (f.conNombre) where.push('k.primer_nombre IS NOT NULL');
     if (f.conCorreo) where.push('k.correo IS NOT NULL');
+    if (origen) {
+      if (f.clasificaciones.length) {
+        where.push(`ro.clasificacion IN (${f.clasificaciones.map(() => '?').join(', ')})`);
+        params.push(...f.clasificaciones);
+      }
+      if (f.corporativo) where.push(`ro.corporativo = ${f.corporativo === 'si' ? 1 : 0}`);
+      if (f.avance) where.push(AVANCE_SQL[f.avance]);
+    }
   }
+  const joinOrigen = origen ? ' JOIN registros ro ON ro.contacto_id = k.id AND ro.campana_id = ?' : '';
   return {
-    sql: `FROM contactos k LEFT JOIN envios e ON e.contacto_id = k.id AND e.campana_id = ? WHERE ${where.join(' AND ')}`,
+    sql: `FROM contactos k LEFT JOIN envios e ON e.contacto_id = k.id AND e.campana_id = ?${joinOrigen} WHERE ${where.join(' AND ')}`,
     params,
+  };
+}
+
+// Columnas del segmento para contar opciones y vista previa (solo con campaña de origen).
+const COLS_SEGMENTO = `, ro.clasificacion AS seg_clasif, ro.corporativo AS seg_corp,
+  ro.interes IS NOT NULL AS seg_a, ro.momento IS NOT NULL AS seg_d, ro.completado_en IS NOT NULL AS seg_comp, ro.paso AS seg_paso`;
+
+function contarSegmento(filas) {
+  const n = (fn) => filas.filter(fn).length;
+  return {
+    clasificaciones: CLASIFICACIONES.map((k) => ({ k, n: n((r) => r.seg_clasif === k) })),
+    corporativos: n((r) => Number(r.seg_corp) === 1),
+    avance: {
+      con_a: n((r) => Number(r.seg_a)),
+      con_d: n((r) => Number(r.seg_d)),
+      completos: n((r) => Number(r.seg_comp)),
+      sin_terminar: n((r) => !Number(r.seg_comp) && r.seg_paso !== 'inicio'),
+    },
   };
 }
 
@@ -149,10 +193,15 @@ async function usados24h() {
 /** Opciones para armar un lote: bases, ciudades y empresas con su cantidad disponible. */
 async function opciones(campanaId) {
   const campana = await campanaOError(campanaId);
-  const { sql, params } = candidatos(campana.id, null);
-  const filas = await q(`SELECT k.hoja_origen, k.ciudad, k.empresa ${sql}`, params);
+  const { sql, params } = candidatos(campana, null);
+  const origen = campana.origen_campana_id ? await db.getCampana(campana.origen_campana_id) : null;
+  const filas = await q(`SELECT k.hoja_origen, k.ciudad, k.empresa${origen ? COLS_SEGMENTO : ''} ${sql}`, params);
   return {
-    campana: { id: campana.id, nombre: campana.nombre, plantilla: campana.plantilla },
+    campana: {
+      id: campana.id, nombre: campana.nombre, plantilla: campana.plantilla,
+      tipo: campana.tipo || 'invitacion', origen: origen ? { id: origen.id, nombre: origen.nombre } : null,
+    },
+    segmento: origen ? contarSegmento(filas) : null,
     disponibles: filas.length,
     hojas: contar(filas, hojasDe),
     ciudades: contar(filas, ciudadDe),
@@ -165,8 +214,12 @@ async function opciones(campanaId) {
 async function previsualizar(campanaId, filtrosCrudos) {
   const campana = await campanaOError(campanaId);
   const f = normalizarFiltros(filtrosCrudos);
-  const { sql, params } = candidatos(campana.id, f);
-  const filas = await q(`SELECT k.hoja_origen, k.ciudad, k.empresa, k.primer_nombre IS NOT NULL AS con_nombre ${sql}`, params);
+  const { sql, params } = candidatos(campana, f);
+  const origen = !!campana.origen_campana_id;
+  const filas = await q(
+    `SELECT k.hoja_origen, k.ciudad, k.empresa, k.primer_nombre IS NOT NULL AS con_nombre${origen ? COLS_SEGMENTO : ''} ${sql}`,
+    params
+  );
   const seleccionados = f.cantidad ? Math.min(f.cantidad, filas.length) : filas.length;
   return {
     coinciden: filas.length,
@@ -176,6 +229,7 @@ async function previsualizar(campanaId, filtrosCrudos) {
     porHoja: contar(filas, hojasDe),
     empresas: contar(filas, empresaDe).slice(0, 8),
     nEmpresas: new Set(filas.map((r) => r.empresa).filter(Boolean)).size,
+    segmento: origen ? contarSegmento(filas) : null,
   };
 }
 
@@ -190,7 +244,7 @@ async function crear({ campana: campanaId, filtros: filtrosCrudos, nombre, tope_
 
   const tope = parseInt(tope_diario, 10);
   const vel = parseFloat(mps);
-  const { sql, params } = candidatos(campana.id, f);
+  const { sql, params } = candidatos(campana, f);
   const ids = (
     await q(`SELECT k.id ${sql} ORDER BY ${ORDEN_SQL[f.orden]}${f.cantidad ? ` LIMIT ${f.cantidad}` : ''}`, params)
   ).map((r) => r.id);
@@ -485,6 +539,7 @@ async function trabajar(lote) {
         idioma: campana.idioma,
         nombre: c.primer_nombre,
         urlToken: token,
+        parametros: await parametrosPlantilla(campana, c),
       });
     } catch (err) {
       const [que, motivo] = clasificar(err);
@@ -575,11 +630,13 @@ async function prueba({ campana: campanaId, numeros, nombre }) {
         continue;
       }
       const token = await db.tokenDeEnvio(campana.id, c.id);
+      const parametros = await parametrosPlantilla(campana, c);
       const waId = await wa.enviarPlantilla(celular, {
         plantilla: campana.plantilla,
         idioma: campana.idioma,
         nombre: c.primer_nombre,
         urlToken: token,
+        parametros,
       });
       await db.registrarEnvio({ campanaId: campana.id, contacto: c, waMessageId: waId, token });
       if (c.hoja_origen === PRUEBA) {
@@ -590,7 +647,10 @@ async function prueba({ campana: campanaId, numeros, nombre }) {
         );
         await q('DELETE FROM registros WHERE campana_id = ? AND contacto_id = ?', [campana.id, c.id]);
       }
-      resultados.push({ numero: celular, ok: true, id: waId, saludo: c.primer_nombre || process.env.TEMPLATE_NOMBRE_DEFECTO || 'estimado(a)' });
+      const saludo =
+        parametros?.find((p) => p.nombre === 'nombre')?.valor || c.primer_nombre || process.env.TEMPLATE_NOMBRE_DEFECTO || 'estimado(a)';
+      const variables = parametros ? parametros.map((p) => `${p.nombre}: ${p.valor}`).join(' · ') : '';
+      resultados.push({ numero: celular, ok: true, id: waId, saludo, variables });
     } catch (err) {
       resultados.push({ numero: celular, ok: false, error: err.message });
     }

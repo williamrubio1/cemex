@@ -37,9 +37,12 @@ CREATE TABLE IF NOT EXISTS contactos (
 CREATE TABLE IF NOT EXISTS campanas (
   id               INT UNSIGNED NOT NULL AUTO_INCREMENT,
   codigo           VARCHAR(60)  NOT NULL,                    -- ej. cierre-2026
+  tipo             VARCHAR(20)  NOT NULL DEFAULT 'invitacion', -- invitacion | seguimiento
+  origen_campana_id INT UNSIGNED NULL,                       -- seguimiento: campaña cuyos registros se siguen
   nombre           VARCHAR(200) NOT NULL,
   plantilla        VARCHAR(120) NOT NULL,                    -- nombre de la plantilla aprobada en Meta
   idioma           VARCHAR(10)  NOT NULL DEFAULT 'es_CO',
+  variables        VARCHAR(255) NULL,                        -- variables de la plantilla, ej. "nombre,capacitacion"
   seminario        VARCHAR(255) NULL,
   fechas           VARCHAR(120) NULL,
   horario          VARCHAR(60)  NULL,
@@ -214,3 +217,25 @@ VALUES (
   NULL
 )
 ON DUPLICATE KEY UPDATE codigo = codigo;
+
+-- ---------- Campañas de seguimiento (plantillas de Utilidad por segmento) ----------
+SET @origen := (SELECT id FROM campanas WHERE codigo = 'capacitaciones-2026');
+
+INSERT INTO campanas (codigo, tipo, origen_campana_id, nombre, plantilla, idioma, variables,
+                      seminario, fechas, horario, url_inscripcion, detalle, activa)
+VALUES ('seguimiento-corporativos-2026', 'seguimiento', @origen,
+        'Seguimiento corporativos - capacitaciones 2026', 'cetex_solicitud_corporativa', 'es_CO', 'nombre,capacitacion',
+        'Cierre Contable y Fiscal con IA y sin IA / Taller SAGRILAFT y PTEE', 'Nov 23, 25 y 26 / Dic 5 y 12', NULL,
+        'https://wa.me/573142511033?text=Hola%2C%20quiero%20una%20cotizaci%C3%B3n%20empresarial%20para%20las%20capacitaciones%20de%20CETEX',
+        NULL, 0),
+       ('seguimiento-calientes-2026', 'seguimiento', @origen,
+        'Seguimiento calientes - capacitaciones 2026', 'cetex_solicitud_inscripcion', 'es_CO', 'nombre,capacitacion',
+        'Cierre Contable y Fiscal con IA y sin IA / Taller SAGRILAFT y PTEE', 'Nov 23, 25 y 26 / Dic 5 y 12', NULL,
+        'https://wa.me/573142511033?text=Hola%2C%20quiero%20completar%20mi%20inscripci%C3%B3n%20a%20las%20capacitaciones%20de%20CETEX',
+        NULL, 0),
+       ('seguimiento-interesados-2026', 'seguimiento', @origen,
+        'Seguimiento interesados - capacitaciones 2026', 'cetex_informacion_solicitada', 'es_CO', 'nombre,capacitacion',
+        'Cierre Contable y Fiscal con IA y sin IA / Taller SAGRILAFT y PTEE', 'Nov 23, 25 y 26 / Dic 5 y 12', NULL,
+        'https://wa.me/573142511033?text=Hola%2C%20quiero%20informaci%C3%B3n%20para%20inscribirme%20en%20las%20capacitaciones%20de%20CETEX',
+        NULL, 0)
+ON DUPLICATE KEY UPDATE codigo = VALUES(codigo);

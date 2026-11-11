@@ -23,7 +23,9 @@ const analisis = require('./analisis');
 const auth = require('./auth');
 const seg = require('./seguridad');
 const lotes = require('./lotes');
+const { enlaceAsesor, enlaceComprobante } = require('./variables');
 const { decidir, respuestaFinal } = require('./conversacion');
+const { PAGO, waComprobante } = require('./oferta');
 
 const PORT = Number(process.env.PORT || 3000);
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
@@ -53,6 +55,8 @@ const PANEL = path.join(PUBLIC_DIR, 'index.html');
 app.get('/', (_req, res) => res.sendFile(PANEL));
 app.get('/panel', (_req, res) => res.redirect('/'));
 app.get('/graficas.js', (_req, res) => res.sendFile(path.join(PUBLIC_DIR, 'graficas.js')));
+// Brochures en PDF que el bot envía por WhatsApp (Meta los descarga de aquí).
+app.use('/docs', express.static(path.join(PUBLIC_DIR, 'docs'), { index: false, maxAge: '1h', fallthrough: true }));
 
 app.get('/health', (_req, res) => {
   res.json({ ok: true, servicio: 'cetex-whatsapp', ts: new Date().toISOString() });
@@ -82,7 +86,10 @@ app.get('/stats', async (req, res) => {
   }
 });
 
-// Clic en "Quiero participar": registra y redirige al enlace de inscripción de la campaña.
+// Clic en un botón con enlace del chat: registra el clic y redirige.
+//   /r/<token>                 -> WhatsApp del asesor (mensaje con nombre, empresa y capacitación)
+//   /r/<token>?a=web           -> página de inscripción y pago de CETEX
+//   /r/<token>?a=comprobante   -> WhatsApp del asesor con "te envío el comprobante de pago…"
 app.get('/r/:token', async (req, res) => {
   try {
     // Los tokens son aleatorios en hex/base64url: cualquier otra cosa no toca la base.
@@ -93,8 +100,16 @@ app.get('/r/:token', async (req, res) => {
       await db.registrarClic(envio.id);
       await db.query(`UPDATE contactos SET estado = 'interesado' WHERE id = ? AND opt_out = 0`, [envio.contacto_id]);
     }
+    const a = req.query.a;
+    if (a === 'web') return res.redirect(302, PAGO.web);
+    if (a === 'comprobante') {
+      const destino = envio && campana ? await enlaceComprobante(campana, envio.contacto_id).catch(() => waComprobante()) : waComprobante();
+      return res.redirect(302, destino);
+    }
     if (!campana) return res.status(404).send('Enlace no disponible');
-    res.redirect(302, campana.url_inscripcion);
+    // Al WhatsApp del asesor con un mensaje que ya dice quién es y qué capacitación le interesa.
+    const destino = envio ? await enlaceAsesor(campana, envio.contacto_id).catch(() => campana.url_inscripcion) : campana.url_inscripcion;
+    res.redirect(302, destino);
   } catch (err) {
     seg.fallo(res, 'r', err, { json: false });
   }
@@ -173,8 +188,10 @@ app.get('/api/config', (_req, res) => {
       telefono: process.env.OP_TELEFONO || '',
       nit: process.env.OP_NIT || '',
     },
-    // Costo aproximado de una plantilla de marketing entregada en Colombia (para estimar lotes).
+    // Costo aproximado de una plantilla entregada en Colombia (para estimar lotes):
+    // marketing (invitaciones) y utilidad (seguimientos).
     costoMensajeUsd: Number(process.env.COSTO_MENSAJE_USD) || 0.0125,
+    costoUtilidadUsd: Number(process.env.COSTO_UTILIDAD_USD) || 0.0008,
   });
 });
 
@@ -411,9 +428,18 @@ async function procesarMensajeEntrante(msg, nombrePerfil) {
   if (!envio && contacto) envio = await db.ultimoEnvioDeContacto(contacto.id);
   const campana = envio ? await db.getCampana(envio.campana_id) : await db.campanaActiva();
   const registro = contacto && campana ? await db.getRegistro(contacto.id, campana.id) : null;
+  // En un seguimiento, lo que respondió en el cuestionario de la campaña de origen (capacitación, nombre…).
+  const origen = contacto && campana?.origen_campana_id ? await db.getRegistro(contacto.id, campana.origen_campana_id) : null;
 
-  const url = PUBLIC_URL && envio ? `${PUBLIC_URL}/r/${envio.token}` : campana?.url_inscripcion;
-  const plan = decidir({ contacto, campana, registro, entrada, url });
+  // Enlaces de los botones, medidos vía /r/<token> cuando hay dominio público.
+  const medido = PUBLIC_URL && envio ? `${PUBLIC_URL}/r/${envio.token}` : null;
+  const url = medido || campana?.url_inscripcion;
+  const enlaces = {
+    web: medido ? `${medido}?a=web` : null,
+    comprobante: medido ? `${medido}?a=comprobante` : null,
+    docs: PUBLIC_URL ? `${PUBLIC_URL}/docs` : null,
+  };
+  const plan = decidir({ contacto, campana, registro, origen, entrada, url, enlaces });
 
   // Primero se guarda el estado (si un envío falla, el contacto vuelve a recibir la pregunta pendiente).
   if (contacto) {
@@ -450,6 +476,12 @@ async function enviarAccion(celular, accion) {
   }
   if (accion.tipo === 'botones') return wa.enviarBotones(celular, accion.cuerpo, accion.botones);
   if (accion.tipo === 'lista') return wa.enviarLista(celular, accion.cuerpo, accion.boton, accion.seccion, accion.filas);
+  if (accion.tipo === 'documento') {
+    // Si el PDF falla (p. ej. Meta no pudo descargarlo), la conversación sigue: la ficha va en el texto siguiente.
+    return wa.enviarDocumento(celular, accion.url, accion.archivo, accion.leyenda).catch((err) => {
+      console.warn(`[out] ${celular} no se pudo enviar el PDF:`, err.message);
+    });
+  }
   console.warn('[out] acción desconocida:', accion.tipo);
 }
 
