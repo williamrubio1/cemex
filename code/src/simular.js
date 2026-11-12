@@ -190,8 +190,8 @@ ok(/\$190\.000/.test(ctas(res.segCotizacion.ultimas)[0].cuerpo) && /\$340\.000/.
 const vi = res.segVerInfo.ultimas;
 ok(vi.length === 2 && vi[0].tipo === 'documento' && /sagrilaft/.test(vi[0].pdf) && vi[1].tipo === 'botones' && !/Jenith/.test(vi[1].cuerpo),
   'seguimiento Ver información: solo el PDF de su capacitación y luego los botones');
-ok(!TODAS.some((x) => x.tipo !== 'documento' && /🎤/.test(cuerpo(x))), 'la ficha en texto no se envía junto al PDF (solo es respaldo)');
-ok(TODAS.filter((x) => x.tipo === 'documento').every((x) => x.respaldo && /🎤/.test(x.respaldo)), 'cada PDF lleva la ficha de respaldo por si falla');
+ok(!TODAS.some((x) => x.tipo !== 'documento' && /👥 Para/.test(cuerpo(x))), 'la ficha en texto no se envía junto al PDF (solo es respaldo)');
+ok(TODAS.filter((x) => x.tipo === 'documento').every((x) => x.respaldo && /👥/.test(x.respaldo)), 'cada PDF lleva la ficha de respaldo por si falla');
 // "Más información" -> PDFs -> [Quiero participar] [Hablar con asesor] -> formas de pago, sin cuestionario
 const P = res.pagar;
 ok(P.registro && P.registro.paso === 'inicio' && !P.registro.interes && P.respuesta === 'participar', 'Quiero participar tras la información: no inicia el cuestionario');

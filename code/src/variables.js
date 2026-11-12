@@ -25,6 +25,7 @@ const NOMBRE_DEFECTO = process.env.TEMPLATE_NOMBRE_DEFECTO || 'estimado(a)';
 const CAPACITACION = {
   cierre: 'el Seminario de Cierre Contable y Fiscal',
   sagrilaft: 'el Taller práctico SAGRILAFT y PTEE',
+  sancionatorio: 'la Máster Class del Nuevo Régimen Sancionatorio',
   ambas: 'el Seminario de Cierre Contable y el Taller SAGRILAFT y PTEE',
 };
 const CAPACITACION_DEFECTO = 'nuestras capacitaciones';

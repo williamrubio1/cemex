@@ -131,6 +131,10 @@ Datos: nombre · correo · ciudad · empresa (si trabaja en una o se inscribe po
 |---|---|---|
 | Seminario Cierre Contable y Fiscal con IA y sin IA | 23, 25 y 26 nov · 5–9 p. m. · virtual · 12 h | $190.000 + IVA |
 | Taller práctico SAGRILAFT y PTEE | 5 y 12 dic (sábados) · 7 a. m.–1 p. m. · virtual · 12 h | $340.000 + IVA |
+| Máster Class: Nuevo Régimen Sancionatorio (Ley 2586 de 2026) | 3 dic · 5–9 p. m. · virtual (Meet) · 4 h | pendiente (el chat remite a cetex.com.co/inscripcion) |
+
+Sin capacitación elegida, el chat envía las tres. El PDF de la Máster Class se generó
+de la pieza gráfica de CETEX (no trae conferencista ni valor).
 
 - El valor se muestra siempre "+ IVA" (CETEX no muestra el total). Sin descuentos por grupo.
 - Formas de pago: 1) página de CETEX cetex.com.co/inscripcion (botón *Inscribirme en

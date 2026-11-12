@@ -48,6 +48,10 @@ const OFERTA = [
   '🛠️ *Taller práctico: SAGRILAFT y PTEE*',
   '📅 5 y 12 de diciembre',
   '🕖 7:00 a. m. a 1:00 p. m.',
+  '',
+  '⚖️ *Máster Class: Nuevo Régimen Sancionatorio*',
+  '📅 3 de diciembre',
+  '🕔 5:00 p. m. a 9:00 p. m.',
 ].join('\n');
 
 const bienvenida = (primer) =>
@@ -85,12 +89,14 @@ const PREGUNTAS = {
     opciones: [
       { id: 'a_cierre', valor: 'cierre', title: 'Cierre Contable y Fiscal', description: 'Con IA y sin IA · 23, 25 y 26 de noviembre' },
       { id: 'a_sagrilaft', valor: 'sagrilaft', title: 'SAGRILAFT y PTEE', description: 'Taller práctico · 5 y 12 de diciembre' },
-      { id: 'a_ambas', valor: 'ambas', title: 'Me interesan ambas' },
+      { id: 'a_sancionatorio', valor: 'sancionatorio', title: 'Régimen Sancionatorio', description: 'Máster Class · 3 de diciembre' },
+      { id: 'a_ambas', valor: 'ambas', title: 'Cierre y SAGRILAFT' },
       { id: 'a_info', valor: 'info', title: 'Más información', description: 'Deseo conocer más información' },
     ],
     escrito(t) {
       const cierre = /cierre|contab|fiscal/.test(t);
       const sagri = /sagrilaft|ptee|lavado/.test(t);
+      if (/sancionatori|aduaner|2586|master/.test(t)) return 'sancionatorio';
       if (/ambas|ambos|las dos|los dos|todas|todos/.test(t) || (cierre && sagri)) return 'ambas';
       if (cierre) return 'cierre';
       if (sagri) return 'sagrilaft';

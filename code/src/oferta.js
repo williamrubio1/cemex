@@ -66,10 +66,38 @@ const CURSOS = {
     pdf: 'cetex-sagrilaft-ptee-2026.pdf',
     archivo: 'CETEX - Taller SAGRILAFT y PTEE 2026.pdf',
   },
+  sancionatorio: {
+    clave: 'sancionatorio',
+    titulo: 'Máster Class: Nuevo Régimen Sancionatorio',
+    corto: 'Régimen Sancionatorio',
+    icono: '⚖️',
+    subtitulo: 'Cómo va su implementación · Ley 2586 de 2026, Resoluciones 019 y 35',
+    fechas: '3 de diciembre',
+    horario: '5:00 a 9:00 p. m.',
+    modalidad: 'Virtual (Google Meet)',
+    duracion: '4 horas',
+    conferencistas: null, // no viene en la pieza de CETEX
+    dirigido:
+      'importadores, exportadores, agentes de aduanas, operadores logísticos, zonas francas ' +
+      'y profesionales de comercio exterior',
+    temas:
+      'nuevo régimen sancionatorio (Ley 2586 de 2026), impacto en los usuarios aduaneros, medidas cautelares, ' +
+      'solvencia económica y origen ilícito de fondos, aprehensión de mercancías, causales eximentes de ' +
+      'responsabilidad, legalización, rescate, maquinaria amarilla y unidades funcionales (Res. 35)',
+    incluye: 'certificado digital',
+    enPdf: 'Fecha, horario, temario y a quién va dirigida.', // la pieza no trae conferencista ni valor
+    valor: null, // PENDIENTE: CETEX aún no entrega el valor
+    pdf: 'cetex-master-class-regimen-sancionatorio-2026.pdf',
+    archivo: 'CETEX - Master Class Regimen Sancionatorio 2026.pdf',
+  },
 };
 
-/** Capacitaciones según la respuesta A (cierre | sagrilaft | ambas | info | vacío -> ambas). */
-const cursosDe = (interes) => (CURSOS[interes] ? [CURSOS[interes]] : [CURSOS.cierre, CURSOS.sagrilaft]);
+const TODOS = () => Object.values(CURSOS);
+/** Capacitaciones según la respuesta A (cierre | sagrilaft | sancionatorio | ambas | info | vacío -> todas). */
+const cursosDe = (interes) =>
+  CURSOS[interes] ? [CURSOS[interes]] : interes === 'ambas' ? [CURSOS.cierre, CURSOS.sagrilaft] : TODOS();
+
+const valorDe = (c) => c.valor || 'valor en cetex.com.co/inscripcion';
 
 /** Ficha completa de una capacitación: solo de respaldo, si el PDF no se puede enviar. */
 const resumen = (c) =>
@@ -78,19 +106,21 @@ const resumen = (c) =>
     c.subtitulo,
     `📅 ${c.fechas} · ${c.horario}`,
     `💻 ${c.modalidad} · ${c.duracion}`,
-    `🎤 ${c.conferencistas}`,
+    c.conferencistas && `🎤 ${c.conferencistas}`,
     `👥 Para ${c.dirigido}.`,
     `📝 Temas: ${c.temas}.`,
     `🎓 Incluye ${c.incluye}.`,
-    `💲 ${c.valor}`,
-  ].join('\n');
+    `💲 ${valorDe(c)}`,
+  ]
+    .filter(Boolean)
+    .join('\n');
 
 /** Texto que acompaña el PDF (el PDF ya trae fechas, temario, conferencistas, valor y pago). */
-const leyendaPdf = (c) => `📄 *${c.titulo}*\nFechas, temario, conferencistas, valor y formas de pago.`;
+const leyendaPdf = (c) => `📄 *${c.titulo}*\n${c.enPdf || 'Fechas, temario, conferencistas, valor y formas de pago.'}`;
 
 /** Formas de pago (va con el botón "Inscribirme en línea" = página de inscripción). */
 const inscripcion = (cursos, encabezado) =>
-  `${encabezado}\n\n${cursos.map((c) => `${c.icono} *${c.titulo}*\n💲 ${c.valor}`).join('\n\n')}\n\n` +
+  `${encabezado}\n\n${cursos.map((c) => `${c.icono} *${c.titulo}*\n💲 ${valorDe(c)}`).join('\n\n')}\n\n` +
   '*Formas de pago*\n' +
   '1️⃣ *Página de CETEX:* inscríbete y paga en línea tocando *Inscribirme en línea*.\n' +
   `2️⃣ *Datáfono virtual Wompi* (todas las tarjetas de crédito):\n${PAGO.wompi}\n` +
@@ -105,7 +135,7 @@ const comprobante = () =>
 
 /** Cotización para empresas (va con el botón "Hablar con asesor"). */
 const cotizacion = (cursos, encabezado) =>
-  `${encabezado}\n\nValor por participante:\n${cursos.map((c) => `${c.icono} ${c.corto}: ${c.valor}`).join('\n')}\n\n` +
+  `${encabezado}\n\nValor por participante:\n${cursos.map((c) => `${c.icono} ${c.corto}: ${valorDe(c)}`).join('\n')}\n\n` +
   'Para preparar la cotización de tu empresa, envíale al asesor:\n👥 Número de participantes\n🏢 Razón social y NIT\n📧 Correo para la factura\n\nEscríbele aquí:';
 
 /** Enlace de respaldo (sin /r/<token>) para enviar el comprobante al WhatsApp de ventas. */
