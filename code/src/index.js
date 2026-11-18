@@ -115,6 +115,26 @@ app.get('/r/:token', async (req, res) => {
   }
 });
 
+// Enlace fijo de una campaña (botón de URL estática en la plantilla): Meta no acepta
+// enlaces directos a WhatsApp en los botones, así que el botón apunta aquí y se
+// redirige al WhatsApp de la campaña (url_inscripcion, con su mensaje ya escrito).
+app.get('/c/:codigo', async (req, res) => {
+  try {
+    const codigo = /^[a-z0-9-]{3,60}$/.test(req.params.codigo) ? req.params.codigo : null;
+    const [campana] = codigo ? await db.query('SELECT codigo, url_inscripcion FROM campanas WHERE codigo = ? LIMIT 1', [codigo]) : [];
+    let destino = null;
+    try {
+      const u = new URL(String(campana?.url_inscripcion || ''));
+      if (/(^|\.)(wa\.me|whatsapp\.com)$/.test(u.hostname)) destino = u.toString();
+    } catch {}
+    if (!destino) return res.status(404).type('text/plain').send('Enlace no disponible');
+    console.log(`[c] clic en el enlace de ${codigo}`);
+    res.redirect(302, destino);
+  } catch (err) {
+    seg.fallo(res, 'c', err, { json: false });
+  }
+});
+
 // ─── Login para la vista interna ────────────────────────────
 app.post('/api/login', async (req, res) => {
   const ip = req.ip || 'sin-ip';

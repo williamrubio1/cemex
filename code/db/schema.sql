@@ -239,3 +239,15 @@ VALUES ('seguimiento-corporativos-2026', 'seguimiento', @origen,
         'https://wa.me/573142511033?text=Hola%2C%20quiero%20informaci%C3%B3n%20para%20inscribirme%20en%20las%20capacitaciones%20de%20CETEX',
         NULL, 0)
 ON DUPLICATE KEY UPDATE codigo = VALUES(codigo);
+
+-- ---------- Recordatorio a interesados (migración 005) ----------
+SET @origen := (SELECT id FROM campanas WHERE codigo = 'capacitaciones-2026');
+
+INSERT INTO campanas (codigo, tipo, origen_campana_id, nombre, plantilla, idioma, variables,
+                      seminario, fechas, horario, url_inscripcion, detalle, activa)
+VALUES ('recordatorio-interesados-2026', 'seguimiento', @origen,
+        'Recordatorio interesados - seminarios diciembre 2026', 'cetex_recordatorio_interes', 'es_CO', 'nombre',
+        'Máster Class Régimen Sancionatorio / Taller SAGRILAFT y PTEE', 'Dic 3 / Dic 5 y 12', NULL,
+        'https://wa.me/573142511033?text=Hola%2C%20recib%C3%AD%20el%20recordatorio%20de%20los%20seminarios%20de%20diciembre%20de%20CETEX%20y%20tengo%20una%20consulta.',
+        NULL, 0)
+ON DUPLICATE KEY UPDATE codigo = VALUES(codigo);

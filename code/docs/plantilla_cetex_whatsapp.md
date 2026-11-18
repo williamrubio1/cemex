@@ -101,3 +101,17 @@ Hola, {{nombre}}. Como lo solicitaste en nuestro chat, te compartimos la informa
 Toca *Ver información* para recibirla aquí mismo.
 ```
 Botones: `Ver información` · `Inscribirme` · `No deseo recibir mensajes`
+
+### `cetex_recordatorio_interes` (campaña `recordatorio-interesados-2026`, migración 005)
+
+Categoría **Utilidad**. Encabezado: **Imagen** (`public/docs/encabezados/cetex_recordatorio_interes.jpeg`;
+la plataforma la envía sola si existe un archivo con el nombre de la plantilla).
+
+```
+Hola, {{nombre}}. Te compartimos un recordatorio con la información de los seminarios de diciembre de CETEX, sobre los que nos consultaste. Si tienes alguna inquietud, con gusto te atendemos por WhatsApp.
+```
+Botones: `Hablar con un asesor` (URL estática `https://cetex.soluctiasas.com/c/recordatorio-interesados-2026`)
+· `No deseo recibir mensajes` (respuesta rápida). Meta no acepta enlaces directos a WhatsApp
+(wa.me) en los botones: `/c/<codigo>` redirige al `url_inscripcion` de la campaña, que es el
+WhatsApp 314 251 1033 con el mensaje "Hola, recibí el recordatorio de los seminarios de
+diciembre de CETEX y tengo una consulta." Los clics solo quedan en el log del servidor.

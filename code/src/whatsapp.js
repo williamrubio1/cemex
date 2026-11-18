@@ -112,14 +112,20 @@ function componentesPlantilla(nombre, urlToken, parametros) {
  * @param {{plantilla:string, idioma?:string, nombre?:string, urlToken?:string, parametros?:{nombre:string,valor:string}[]|null}} o
  */
 async function enviarPlantilla(to, o) {
+  const nombre = o.plantilla || process.env.TEMPLATE_NAME;
+  const components = componentesPlantilla(o.nombre, o.urlToken, o.parametros);
+  // Encabezado con imagen: si existe public/docs/encabezados/<plantilla>.jpg|jpeg|png se envía
+  // (subida a Meta una vez y reutilizada por id). Sin archivo, la plantilla va como antes.
+  const imagen = await encabezadoImagen(nombre);
+  if (imagen) components.unshift({ type: 'header', parameters: [{ type: 'image', image: { id: imagen } }] });
   const payload = {
     messaging_product: 'whatsapp',
     to: soloDigitos(to),
     type: 'template',
     template: {
-      name: o.plantilla || process.env.TEMPLATE_NAME,
+      name: nombre,
       language: { code: o.idioma || process.env.TEMPLATE_LANG || 'es_CO' },
-      components: componentesPlantilla(o.nombre, o.urlToken, o.parametros),
+      components,
     },
   };
   const data = await llamarAPI(payload);
@@ -270,6 +276,21 @@ function idMedio(ruta, tipo = 'application/pdf') {
 
 /** Olvida el id de un archivo (p. ej. si Meta lo rechaza por vencido). */
 const olvidarMedio = (ruta) => medios.delete(ruta);
+
+// ─── Imagen de encabezado de plantillas ─────────────────────
+const DIR_ENCABEZADOS = path.join(__dirname, '..', 'public', 'docs', 'encabezados');
+const TIPOS_IMAGEN = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png' };
+
+/** id de Meta de la imagen de encabezado de una plantilla, o null si no tiene archivo. */
+async function encabezadoImagen(plantilla) {
+  if (!plantilla || !/^[a-z0-9_]+$/i.test(plantilla)) return null;
+  for (const [ext, tipo] of Object.entries(TIPOS_IMAGEN)) {
+    const ruta = path.join(DIR_ENCABEZADOS, `${plantilla}.${ext}`);
+    const existe = await fs.access(ruta).then(() => true, () => false);
+    if (existe) return idMedio(ruta, tipo);
+  }
+  return null;
+}
 
 /**
  * Documento (PDF), solo dentro de la ventana de 24 h.

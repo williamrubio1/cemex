@@ -170,6 +170,8 @@ plantilla de **Utilidad** a quienes ya conversaron con el bot en la campaña de 
   - *Hablar con asesor* / *Tengo una duda* → [Hablar con asesor].
 - El enlace al asesor (`/r/<token>`) mide el clic y abre el WhatsApp de ventas con un
   mensaje que ya dice el nombre, la empresa y la capacitación de la persona.
+- **Imagen de encabezado:** si existe `public/docs/encabezados/<plantilla>.jpg|jpeg|png`, la
+  plantilla se envía con esa imagen (subida a Meta una vez). Ej.: recordatorio a interesados (005).
 - Los envíos y respuestas de cada seguimiento se ven aparte en Respuestas y Análisis
   (con la clasificación de origen); el registro del cuestionario no se modifica.
 
