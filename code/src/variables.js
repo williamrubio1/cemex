@@ -97,7 +97,7 @@ async function enlaceAsesor(campana, contactoId) {
   if (soy) partes.push(soy);
   if (capacitacion) partes.push(`me interesa ${capacitacion}`);
   if (!partes.length) return base;
-  const texto = url.searchParams.get('text') || 'Hola';
+  const texto = (url.searchParams.get('text') || 'Hola').replace(/[.\s]+$/, '');
   url.searchParams.set('text', `${texto}. ${partes.join(', ')}.`);
   return url.toString();
 }

@@ -26,6 +26,8 @@ const NOMBRE_DEFECTO = process.env.TEMPLATE_NOMBRE_DEFECTO || 'estimado(a)';
 // Índice (0, 1, 2…) del botón "Quiero participar" si su URL es DINÁMICA
 // (https://<dominio>/r/{{1}}). Vacío = URL estática, no se envía parámetro.
 const URL_BTN_INDEX = (process.env.TEMPLATE_URL_BOTON_INDEX || '').trim();
+// Cuenta de WhatsApp Business (para leer la estructura de las plantillas aprobadas).
+const WABA_ID = (process.env.WABA_ID || '1740402857496773').trim();
 
 // WHATSAPP_API_BASE solo se usa en pruebas locales (simulador de la API); en producción, vacío.
 const API_BASE = (process.env.WHATSAPP_API_BASE || 'https://graph.facebook.com').replace(/\/+$/, '');
@@ -79,9 +81,9 @@ async function registrarSalida(to, tipo, contenido, data) {
  * Componentes de la plantilla.
  * - `parametros` ([{ nombre, valor }], de campanas.variables): variables con nombre, en orden.
  * - Sin `parametros` (modo anterior): una variable = primer nombre, según TEMPLATE_PARAM_NAME.
- * - Si aplica, el token del botón de URL dinámica.
+ * - Si aplica, el token del botón de URL dinámica (índice detectado en Meta o TEMPLATE_URL_BOTON_INDEX).
  */
-function componentesPlantilla(nombre, urlToken, parametros) {
+function componentesPlantilla(nombre, urlToken, parametros, indiceUrl) {
   const comps = [];
   if (Array.isArray(parametros)) {
     if (parametros.length) {
@@ -95,15 +97,48 @@ function componentesPlantilla(nombre, urlToken, parametros) {
     if (TEMPLATE_PARAM_NAME) p.parameter_name = TEMPLATE_PARAM_NAME; // variable con nombre
     comps.push({ type: 'body', parameters: [p] });
   }
-  if (URL_BTN_INDEX !== '' && urlToken) {
+  // indiceUrl: número = detectado en Meta · null = la plantilla no tiene URL dinámica ·
+  // undefined = no se pudo consultar (se usa TEMPLATE_URL_BOTON_INDEX).
+  const indice = indiceUrl === undefined ? URL_BTN_INDEX : indiceUrl === null ? '' : String(indiceUrl);
+  if (indice !== '' && urlToken) {
     comps.push({
       type: 'button',
       sub_type: 'url',
-      index: URL_BTN_INDEX,
+      index: indice,
       parameters: [{ type: 'text', text: String(urlToken) }],
     });
   }
   return comps;
+}
+
+// ─── Estructura de las plantillas aprobadas en Meta ─────────
+// Se consulta en Meta si la plantilla tiene un botón de URL DINÁMICA (…/r/{{1}}): así el token
+// de cada persona solo se envía cuando la plantilla lo espera (si se manda a una plantilla con
+// URL fija, Meta rechaza el envío). Se guarda 10 minutos.
+const VIDA_ESTRUCTURA_MS = 10 * 60 * 1000;
+const estructuras = new Map(); // "plantilla|idioma" -> { t, promesa: Promise<índice|null> }
+
+/** Índice del botón de URL dinámica de la plantilla aprobada, o null si no tiene. */
+function botonUrlDinamico(plantilla, idioma) {
+  if (!WABA_ID || !WHATSAPP_TOKEN || !plantilla) return Promise.resolve(undefined);
+  const clave = `${plantilla}|${idioma}`;
+  const e = estructuras.get(clave);
+  if (e && Date.now() - e.t < VIDA_ESTRUCTURA_MS) return e.promesa;
+  const promesa = (async () => {
+    const url = `${API_BASE}/${GRAPH_VERSION}/${WABA_ID}/message_templates?name=${encodeURIComponent(plantilla)}&fields=name,language,status,components&limit=100`;
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${WHATSAPP_TOKEN}` }, signal: AbortSignal.timeout(15000) });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(`consulta de plantilla ${res.status}: ${data.error?.message || 'error'}`);
+    if (!Array.isArray(data.data)) return undefined; // respuesta inesperada: no se puede saber
+    const t = data.data.find((x) => x.name === plantilla && x.language === idioma);
+    if (!t) return undefined;
+    const botones = (t.components || []).find((c) => String(c.type).toUpperCase() === 'BUTTONS')?.buttons || [];
+    const i = botones.findIndex((b) => String(b.type).toUpperCase() === 'URL' && /\{\{1\}\}/.test(b.url || ''));
+    return i >= 0 ? i : null;
+  })();
+  estructuras.set(clave, { t: Date.now(), promesa });
+  promesa.catch(() => estructuras.delete(clave));
+  return promesa;
 }
 
 /**
@@ -113,7 +148,14 @@ function componentesPlantilla(nombre, urlToken, parametros) {
  */
 async function enviarPlantilla(to, o) {
   const nombre = o.plantilla || process.env.TEMPLATE_NAME;
-  const components = componentesPlantilla(o.nombre, o.urlToken, o.parametros);
+  const idioma = o.idioma || process.env.TEMPLATE_LANG || 'es_CO';
+  let indiceUrl; // undefined si no se pudo consultar
+  try {
+    indiceUrl = await botonUrlDinamico(nombre, idioma);
+  } catch (err) {
+    console.warn(`[whatsapp] no se pudo leer la plantilla ${nombre} en Meta (se usa TEMPLATE_URL_BOTON_INDEX):`, err.message);
+  }
+  const components = componentesPlantilla(o.nombre, o.urlToken, o.parametros, indiceUrl);
   // Encabezado con imagen: si existe public/docs/encabezados/<plantilla>.jpg|jpeg|png se envía
   // (subida a Meta una vez y reutilizada por id). Sin archivo, la plantilla va como antes.
   const imagen = await encabezadoImagen(nombre);
@@ -124,7 +166,7 @@ async function enviarPlantilla(to, o) {
     type: 'template',
     template: {
       name: nombre,
-      language: { code: o.idioma || process.env.TEMPLATE_LANG || 'es_CO' },
+      language: { code: idioma },
       components,
     },
   };

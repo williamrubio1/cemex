@@ -6,7 +6,7 @@
  *
  *   campana     id de la campaña (obligatorio; el servidor pone la activa si falta)
  *   estado      estado del contacto, uno o varios separados por coma
- *   respuesta   interesados | mas_info | participar | opt_out | texto | sin_respuesta
+ *   respuesta   interesados | mas_info | participar | clic | opt_out | texto | sin_respuesta
  *   entrega     no_enviado | enviado | entregado | leido | fallido | sin_whatsapp
  *   hoja        hoja de origen del Excel ("PRUEBA" muestra los números de prueba, ocultos por defecto)
  *   ciudad      ciudad / región deducida ("Sin ciudad" = sin dato)
@@ -77,6 +77,9 @@ function filtro(f = {}, campana) {
     case 'texto':
       where.push('e.respuesta = ?');
       params.push(f.respuesta);
+      break;
+    case 'clic': // tocaron un botón con enlace al asesor (/r/<token>)
+      where.push('e.clic_en IS NOT NULL');
       break;
     case 'sin_respuesta':
       where.push('e.id IS NOT NULL AND e.respondido_en IS NULL AND e.clic_en IS NULL');

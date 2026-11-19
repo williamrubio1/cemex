@@ -109,7 +109,7 @@ async function aExcel(filas) {
     { header: 'Ciudad (base)', key: 'ciudad', width: 20 },
     { header: 'Correo (base)', key: 'correo', width: 30 },
     { header: 'Respuesta', key: 'respuesta', width: 22 },
-    { header: 'Clic en "Quiero participar"', key: 'clic_en', width: 22 },
+    { header: 'Clic en botón al asesor', key: 'clic_en', width: 22 },
     { header: 'Fecha de respuesta', key: 'respondido_en', width: 20 },
     { header: 'Envío', key: 'estado_envio', width: 12 },
     { header: 'Enviado', key: 'enviado_en', width: 20 },

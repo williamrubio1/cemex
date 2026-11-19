@@ -122,6 +122,7 @@
         <option value="interesados">Interesados (para el asesor)</option>
         <option value="participar">Quieren participar</option>
         <option value="mas_info">Pidieron más información</option>
+        <option value="clic">Tocaron "Hablar con asesor"</option>
         <option value="texto">Escribieron un mensaje</option>
         <option value="opt_out">No desean mensajes</option>
         <option value="sin_respuesta">Sin respuesta</option>
@@ -315,7 +316,7 @@
 
     const resp = (f) => {
       if (f.respuesta) return `<span class="pill">${RESP[f.respuesta] || esc(f.respuesta)}</span>`;
-      if (f.clic_en) return '<span class="pill">Quiere participar</span>';
+      if (f.clic_en) return '<span class="pill">Tocó "Hablar con asesor"</span>';
       return f.estado_envio ? '<span class="no">Sin respuesta</span>' : '<span class="no">No enviado</span>';
     };
     const envio = (f) => f.estado_envio === 'fallido'
