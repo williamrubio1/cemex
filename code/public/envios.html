@@ -246,6 +246,12 @@
               <label for="f-seminario">Seminario previo contiene</label>
               <input id="f-seminario" type="search" placeholder="Ej. NIIF, exógena, comercio exterior…" style="width:100%" />
             </div>
+            <div class="campo">
+              <label for="f-recibieron">Solo quienes recibieron la campaña</label>
+              <select id="f-recibieron" style="width:100%" title="Mensaje entregado o leído: deja fuera números equivocados">
+                <option value="">— Cualquiera —</option>
+              </select>
+            </div>
             <div class="campo opts">
               <label><input type="checkbox" id="f-nuevos" /> Solo nunca contactados en otras campañas</label>
               <label><input type="checkbox" id="f-connombre" /> Solo con nombre (saludo personalizado)</label>
@@ -402,6 +408,12 @@
       checks('f-ciudades', opciones.ciudades);
       $('dl-empresas').innerHTML = opciones.empresas.map((e) => `<option value="${esc(e.k)}">${fmt(e.n)} contacto(s)</option>`).join('');
       $('f-disp').textContent = `Disponibles en esta campaña: ${fmt(opciones.disponibles)}.`;
+      // "Recibieron la campaña": las demás campañas (mensaje entregado o leído).
+      const prevRec = $('f-recibieron').value;
+      $('f-recibieron').innerHTML = '<option value="">— Cualquiera —</option>' + campanas
+        .filter((c) => String(c.id) !== String($('campana').value))
+        .map((c) => `<option value="${c.id}">${esc(c.nombre)} (entregada)</option>`).join('');
+      if ([...$('f-recibieron').options].some((o) => o.value === prevRec)) $('f-recibieron').value = prevRec;
       pintarSegmento(opciones.segmento);
       pintarEmpresas();
       previsualizar();
@@ -450,7 +462,7 @@
       hojas: marcados('f-hojas'), ciudades: marcados('f-ciudades'), empresas: empresasSel,
       empresaContiene: $('f-contiene').value.trim(), seminario: $('f-seminario').value.trim(),
       soloNuevos: $('f-nuevos').checked, conNombre: $('f-connombre').checked, conCorreo: $('f-concorreo').checked,
-      cantidad: $('f-cantidad').value, orden: $('f-orden').value,
+      cantidad: $('f-cantidad').value, orden: $('f-orden').value, recibieron: $('f-recibieron').value,
       clasificaciones: marcados('f-clasif'), corporativo: $('f-corp').value, avance: $('f-avance').value,
     };
   }

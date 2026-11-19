@@ -251,3 +251,7 @@ VALUES ('recordatorio-interesados-2026', 'seguimiento', @origen,
         'https://wa.me/573142511033?text=Hola%2C%20recib%C3%AD%20el%20recordatorio%20de%20los%20seminarios%20de%20diciembre%20de%20CETEX%20y%20tengo%20una%20consulta.',
         NULL, 0)
 ON DUPLICATE KEY UPDATE codigo = VALUES(codigo);
+
+-- Migración 006: el recordatorio va a toda la base que recibió la invitación (no exige registro)
+UPDATE campanas SET tipo = 'invitacion', origen_campana_id = NULL, nombre = 'Recordatorio seminarios diciembre 2026'
+ WHERE codigo = 'recordatorio-interesados-2026';

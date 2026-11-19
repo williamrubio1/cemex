@@ -53,6 +53,8 @@ function normalizarFiltros(f = {}) {
     conCorreo: bool(f.conCorreo),
     cantidad: Number.isFinite(cantidad) && cantidad > 0 ? Math.min(cantidad, 100000) : null,
     orden: ['base', 'aleatorio', 'empresa', 'ciudad'].includes(f.orden) ? f.orden : 'base',
+    // Solo quienes recibieron (entregada o leída) otra campaña: deja fuera números equivocados.
+    recibieron: /^\d+$/.test(String(f.recibieron || '')) ? Number(f.recibieron) : null,
     // Segmento del cuestionario (solo campañas de seguimiento: registros de la campaña de origen).
     clasificaciones: lista(f.clasificaciones).filter((c) => CLASIFICACIONES.includes(c)),
     corporativo: ['si', 'no'].includes(f.corporativo) ? f.corporativo : '',
@@ -135,6 +137,11 @@ function candidatos(campana, f) {
     if (f.soloNuevos) where.push("k.estado = 'no_contactado'");
     if (f.conNombre) where.push('k.primer_nombre IS NOT NULL');
     if (f.conCorreo) where.push('k.correo IS NOT NULL');
+    if (f.recibieron) {
+      where.push(`EXISTS (SELECT 1 FROM envios er WHERE er.contacto_id = k.id AND er.campana_id = ?
+        AND (er.entregado_en IS NOT NULL OR er.leido_en IS NOT NULL))`);
+      params.push(f.recibieron);
+    }
     if (origen) {
       if (f.clasificaciones.length) {
         where.push(`ro.clasificacion IN (${f.clasificaciones.map(() => '?').join(', ')})`);
